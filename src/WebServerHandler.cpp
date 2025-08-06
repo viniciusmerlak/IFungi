@@ -3,14 +3,64 @@
 WebServerHandler::WebServerHandler(WiFiConfigurator& wifiConfig, FirebaseHandler& fbHandler) 
     : wifiConfigurator(wifiConfig), firebaseHandler(fbHandler) {}
 
+void WebServerHandler::saveFirebaseCredentials(const String& email, const String& password) {
+    Preferences preferences;
+    if(!preferences.begin("firebase-creds", false)) {
+        Serial.println("[ERRO] Falha ao abrir namespace das Preferences");
+        return;
+    }
+    
+    if(!preferences.putString("email", email)) {
+        Serial.println("[ERRO] Falha ao salvar email");
+    }
+    if(!preferences.putString("password", password)) {
+        Serial.println("[ERRO] Falha ao salvar senha");
+    }
+    
+    preferences.end();
+    Serial.println("Credenciais do Firebase salvas com sucesso");
+}
+bool WebServerHandler::loadFirebaseCredentials(String& email, String& password) {
+    Preferences preferences;
+    
+    // Tenta abrir o namespace em modo leitura
+    if(!preferences.begin("firebase-creds", true)) {
+        Serial.println("[AVISO] Namespace 'firebase-creds' não encontrado. Criando novo...");
+        
+        // Tenta criar o namespace se não existir
+        if(!preferences.begin("firebase-creds", false)) {
+            Serial.println("[ERRO CRÍTICO] Falha ao criar namespace das Preferences");
+            return false;
+        }
+        preferences.end();
+        return false;
+    }
+    
+    email = preferences.getString("email", "");
+    password = preferences.getString("password", "");
+    preferences.end();
+    
+    bool credentialsValid = !email.isEmpty() && !password.isEmpty();
+    if(!credentialsValid) {
+        Serial.println("[AVISO] Credenciais não encontradas ou inválidas");
+    }
+    
+    return credentialsValid;
+}
 void WebServerHandler::begin(bool wifiConnected) {
     this->wifiConnected = wifiConnected;
-
     if(wifiConnected) {
-        // Modo WiFi conectado - mostra apenas Firebase
+        String email, password;
+        if(loadFirebaseCredentials(email, password)) {
+            Serial.println("Credenciais do Firebase carregadas da memória");
+            firebaseHandler.begin(FIREBASE_API_KEY, email, password, DATABASE_URL);
+        } else {
+            Serial.println("Nenhuma credencial do Firebase encontrada na memória");
+        }
+    }
+    if(wifiConnected) {
         server.on("/", HTTP_GET, [this]() { handleFirebaseConfig(); });
     } else {
-        // Modo AP - mostra configuração WiFi
         server.on("/", HTTP_GET, [this]() { handleWiFiConfig(); });
     }
     
@@ -19,6 +69,7 @@ void WebServerHandler::begin(bool wifiConnected) {
     server.onNotFound([this]() { handleNotFound(); });
     server.begin();
 }
+
 
 void WebServerHandler::handleClient() {
     server.handleClient();
@@ -72,19 +123,22 @@ void WebServerHandler::handleFirebaseConfig() {
     }
 
     if(server.method() == HTTP_POST) {
-        String FIREBASE_API_KEY = "AIzaSyDkPzzLHykaH16FsJpZYwaNkdTuOOmfnGE";
         String FIREBASE_EMAIL = server.arg("email");
         String FIREBASE_PASSWORD = server.arg("password");
         Serial.println("Tentando autenticar no Firebase...");
         Serial.print("Email: "); Serial.println(FIREBASE_EMAIL);
-        firebaseHandler.begin(FIREBASE_API_KEY, FIREBASE_EMAIL, FIREBASE_PASSWORD);
+        
+        firebaseHandler.begin(FIREBASE_API_KEY, FIREBASE_EMAIL, FIREBASE_PASSWORD, DATABASE_URL);
         
         if(firebaseHandler.isAuthenticated()) {
+            // Salva as credenciais apenas se a autenticação for bem-sucedida
+            saveFirebaseCredentials(FIREBASE_EMAIL, FIREBASE_PASSWORD);
             server.send(200, "text/html", "<h1>Sucesso!</h1><p>Autenticado no Firebase</p>");
         } else {
             server.send(200, "text/html", "<h1>Erro</h1><p>Falha na autenticação</p><a href='/'>Tentar novamente</a>");
         }
     } else {
+        // Mostra o formulário de configuração do Firebase
         String html = R"(
             <!DOCTYPE html>
             <html>

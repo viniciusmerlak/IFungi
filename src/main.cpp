@@ -2,10 +2,10 @@
 #include "WiFiConfigurator.h"
 #include "FirebaseHandler.h"
 #include "WebServerHandler.h"
-
+#include "perdiavontadedeviver.h"
 const char* AP_SSID = "IFungi-Config";
 const char* AP_PASSWORD = "config1234";
-
+String ifungiID = "IFUNGI-" + getMacAddress();
 WiFiConfigurator wifiConfig;
 FirebaseHandler firebase;
 WebServerHandler webServer(wifiConfig, firebase);
@@ -13,6 +13,7 @@ WebServerHandler webServer(wifiConfig, firebase);
 void setup() {
     Serial.begin(115200);
     delay(1000);
+
 
     // Tenta conectar com WiFi salvo
     String ssid, password;
@@ -30,6 +31,14 @@ void setup() {
 }
 
 void loop() {
-    webServer.handleClient();
-    delay(10);
+    if (firebase.authenticated == false) {
+        webServer.handleClient();
+        delay(5);
+    }
+
+    firebase.seraQeuCrio();
+    delay(5000);
+    
+
+
 }
