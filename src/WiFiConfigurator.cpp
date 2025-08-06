@@ -1,102 +1,83 @@
 #include "WiFiConfigurator.h"
-Preferences preferences;
+
 void WiFiConfigurator::startAP(const char* apSSID, const char* apPassword) {
-    pinMode(LED_AP, OUTPUT);
-    digitalWrite(LED_AP, LOW);  // Acende o LED
-    
     WiFi.softAP(apSSID, apPassword);
-    apActive = true;
-    Serial.println("AP Started - LED azul ligado");
+    Serial.println("AP Started");
+    Serial.print("SSID: "); Serial.println(apSSID);
+    Serial.print("IP: "); Serial.println(WiFi.softAPIP());
 }
+
 bool WiFiConfigurator::connectToWiFi(const char* ssid, const char* password) {
     Serial.println("Connecting to WiFi...");
+    Serial.print("Conectando-se a ");
+    Serial.println(ssid);
     WiFi.begin(ssid, password);
-
-    int attempts = 0;
-    while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+    
+    while (WiFi.status() != WL_CONNECTED) {
         delay(500);
         Serial.print(".");
-        attempts++;
     }
+    
+    Serial.println("");
+    Serial.println("WiFi conectada.");
+    Serial.println("Endereço de IP: ");
+    Serial.println(WiFi.localIP());
 
     if (WiFi.status() == WL_CONNECTED) {
-        Serial.println("\nConnected to WiFi!");
-        Serial.print("IP Address: ");
-        Serial.println(WiFi.localIP());
+        Serial.println("\nConnected!");
+        Serial.print("IP: "); Serial.println(WiFi.localIP());
         return true;
-    } else {
-        Serial.println("\nFailed to connect to WiFi");
-        return false;
     }
+    
+    Serial.println("\nConnection failed");
+    return false;
 }
 
 void WiFiConfigurator::stopAP() {
-    setAPStatus(false);  // Reaproveita a lógica existente
     WiFi.softAPdisconnect(true);
-    Serial.println("AP completamente desligado");
-}
-
-void WiFiConfigurator::showErrorPattern() {
-    for(int i = 0; i < 3; i++) {
-        digitalWrite(LED_AP, LOW);
-        delay(200);
-        digitalWrite(LED_AP, HIGH);
-        delay(200);
-    }
+    Serial.println("AP stopped");
 }
 
 bool WiFiConfigurator::isConnected() {
     return WiFi.status() == WL_CONNECTED;
 }
-bool WiFiConfigurator::reconnectWiFi() {
-    if(WiFi.status() != WL_CONNECTED) {
-        String ssid, password;
-        if(loadCredentials(ssid, password)) {
-            Serial.println("Tentando reconectar ao WiFi...");
-            return connectToWiFi(ssid.c_str(), password.c_str());
-        }
-    }
-    return false;
-}
+
 String WiFiConfigurator::getLocalIP() {
     return WiFi.localIP().toString();
 }
-void WiFiConfigurator::saveCredentials(const char* ssid, const char* password) {
-    preferences.begin("wifi-creds", false);
-    preferences.putString("ssid", ssid);
-    preferences.putString("password", password);
-    preferences.end();
-    Serial.println("Credentials saved to flash");
-}
 
 bool WiFiConfigurator::loadCredentials(String &ssid, String &password) {
-    preferences.begin("wifi-creds", true);
+    if(!preferences.begin("wifi-creds", true)) { // Modo read-only
+        Serial.println("Namespace não existe, criando...");
+        preferences.end();
+        return false;
+    }
     
-    if (preferences.isKey("ssid")) {
+    if(preferences.isKey("ssid")) {
         ssid = preferences.getString("ssid", "");
         password = preferences.getString("password", "");
         preferences.end();
-        
-        if (ssid.length() > 0) {
-            Serial.println("Loaded credentials from flash");
-            return true;
-        }
+        return ssid.length() > 0;
     }
-    
     preferences.end();
     return false;
 }
 
-void WiFiConfigurator::setAPStatus(bool active) {
-    apActive = active;
-    digitalWrite(LED_AP, active ? LOW : HIGH);  // LOW acende, HIGH apaga
-    Serial.printf("AP Status: %s - LED %s\n", 
-                 active ? "Ativo" : "Inativo",
-                 active ? "Ligado" : "Desligado");
+void WiFiConfigurator::saveCredentials(const char* ssid, const char* password) {
+    if(!preferences.begin("wifi-creds", false)) { // Modo read-write
+        Serial.println("Falha ao acessar NVS!");
+        return;
+    }
+    preferences.putString("ssid", ssid);
+    preferences.putString("password", password);
+    preferences.end();
+    Serial.println("Credenciais salvas no NVS");
 }
+
 void WiFiConfigurator::clearCredentials() {
     preferences.begin("wifi-creds", false);
     preferences.clear();
     preferences.end();
-    Serial.println("Credentials cleared from flash");
+    nvs_flash_erase(); // Apaga toda a partição NVS
+    nvs_flash_init();  // Reinicializa
 }

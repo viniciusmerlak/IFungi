@@ -1,64 +1,34 @@
 #include "FirebaseHandler.h"
+#include "WebServer.h"
 
-FirebaseHandler::FirebaseHandler() : lastErrorMessage(""), lastErrorCode(AUTH_SUCCESS) {}
 
-FirebaseHandler::AuthError FirebaseHandler::begin(const String& email, const String& password) {
-    firebaseConfig.host = FIREBASE_HOST.c_str();
-    firebaseConfig.api_key = API_KEY.c_str();
+void FirebaseHandler::begin(const String &FIREBASE_API_KEY, const String &FIREBASE_EMAIL, const String &FIREBASE_PASSWORD) {
+    config.api_key = FIREBASE_API_KEY.c_str();
+    auth.user.email = FIREBASE_EMAIL.c_str();
+    auth.user.password = FIREBASE_PASSWORD.c_str();
+    Firebase.reconnectNetwork(true);
+
+    Serial.println("Inicializando Firebase...");
+    Firebase.begin(&config, &auth);
     
-    firebaseAuth.user.email = email.c_str();
-    firebaseAuth.user.password = password.c_str();
 
-    Firebase.reconnectWiFi(true);
-    authenticated = false;
-    lastErrorMessage = "";
-    lastErrorCode = AUTH_SUCCESS;
-
-    // Versão corrigida do begin()
-    Firebase.begin(&firebaseConfig, &firebaseAuth); 
-    
-    unsigned long startTime = millis();
-    while (!Firebase.ready() && (millis() - startTime < 10000)) {
-        if (Firebase.isTokenExpired()) {
-            lastErrorCode = AUTH_WRONG_PASSWORD;
-            lastErrorMessage = "Token expirado ou credenciais inválidas";
-            return lastErrorCode;
+    // Espera com timeout
+    int attempts = 0;
+    while (!Firebase.ready() && attempts < 10) {
+        delay(500);
+        Serial.print(".");
+        if (!Firebase.ready() && MB_String(auth.token.uid).length() == 0) {
+            Serial.println("\nErro de autenticação: UID não recebido.");
+            authenticated = false;
+            return;
         }
-        delay(100);
+        attempts++;
     }
 
-    if (!Firebase.ready()) {
-        lastErrorCode = AUTH_NETWORK_ERROR;
-        lastErrorMessage = "Timeout de conexão com o Firebase";
-        return lastErrorCode;
-    }
-
-    authenticated = true;
-    lastErrorCode = AUTH_SUCCESS;
-    return lastErrorCode;
+    authenticated = Firebase.ready();
+    Serial.println(authenticated ? "\nFirebase autenticado!" : "\nFalha no Firebase");
 }
 
-bool FirebaseHandler::isAuthenticated() const {
-    return authenticated && Firebase.ready();
-}
-
-String FirebaseHandler::getLastErrorMessage() const {
-    return lastErrorMessage;
-}
-
-FirebaseHandler::AuthError FirebaseHandler::getLastErrorCode() const {
-    return lastErrorCode;
-}
-
-void FirebaseHandler::sendData(const String& path, const String& value) {
-    if(!isAuthenticated()) {
-        Serial.println("Erro: Não autenticado no Firebase");
-        return;
-    }
-
-    if(Firebase.setString(firebaseData, path.c_str(), value.c_str())) {
-        Serial.println("Dados enviados com sucesso");
-    } else {
-        Serial.println("Erro ao enviar dados: " + String(firebaseData.errorReason().c_str()));
-    }
+bool FirebaseHandler::isAuthenticated() {
+    return authenticated;
 }

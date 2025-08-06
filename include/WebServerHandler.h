@@ -8,24 +8,17 @@
 class WebServerHandler {
 public:
     WebServerHandler(WiFiConfigurator& wifiConfig, FirebaseHandler& fbHandler);
-    void begin();
+    void begin(bool wifiConnected);
     void handleClient();
-    bool isConfigured();
     
-    // Adicione estas declarações
-    String getSSID();
-    String getPassword();
-
 private:
     WebServer server;
     WiFiConfigurator& wifiConfigurator;
     FirebaseHandler& firebaseHandler;
-    bool configured;
-    String ssid;
-    String password;
+    bool wifiConnected;
     
     void handleRoot();
-    void handleConfigure();
+    void handleWiFiConfig();
     void handleFirebaseConfig();
     void handleNotFound();
 };
