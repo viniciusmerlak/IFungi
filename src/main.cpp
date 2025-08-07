@@ -31,14 +31,18 @@ void setup() {
 }
 
 void loop() {
-    if (firebase.authenticated == false) {
-        webServer.handleClient();
-        delay(5);
-    }
-
-    firebase.seraQeuCrio();
-    delay(5000);
+    webServer.handleClient();  // Sempre processa requisições (importante!)
     
-
-
+    if(!firebase.authenticated) {
+        delay(5);  // Delay curto no modo AP
+    } else {
+        // Código após autenticação
+        static bool estufaCriada = false;
+        if(!estufaCriada) {
+            firebase.seraQeuCrio();
+            firebase.criarEstufaInicial("usuarioCriador", "usuarioAtual");
+            estufaCriada = true;
+        }
+        delay(10000);  // Delay longo após autenticação
+    }
 }
