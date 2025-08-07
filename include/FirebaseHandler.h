@@ -1,25 +1,37 @@
 #ifndef FIREBASE_HANDLER_H
 #define FIREBASE_HANDLER_H
+
 #include "perdiavontadedeviver.h"
 #include <FirebaseESP32.h>
 
 class FirebaseHandler {
 public:
-    void begin(const String& FIREBASE_API_KEY, const String& FIREBASE_EMAIL, const String& FIREBASE_PASSWORD, const String& DATABASE_URL);
-    bool isAuthenticated();
-    bool authenticated = false;
+    void begin(const String& apiKey, const String& email, const String& password, const String& databaseUrl);
+    bool isAuthenticated() const;
+    bool authenticate(const String& email, const String& password);
+    void resetAuthAttempts();
+    bool permissaoUser(const String& userUID, const String& estufaID);
     void criarEstufaInicial(const String& usuarioCriador, const String& usuarioAtual);
     bool estufaExiste(const String& estufaId);
     void seraQeuCrio();
-    bool permissaoUser(const String& userUID, const String& estufaID);
-    FirebaseData fbdo;
-private:
+    bool loadFirebaseCredentials(String& email, String& password);
     
-    FirebaseAuth auth;
-    FirebaseConfig config;
-    String getMacAddress(); // Função para obter o endereço MAC
+    // Variáveis públicas
+    FirebaseData fbdo;
     String estufaId;
     String userUID;
+    bool authenticated = false;
+
+private:
+    String getMacAddress();
+    FirebaseAuth auth;
+    FirebaseConfig config;
+    
+    // Controle de tentativas
+    unsigned long lastAuthAttempt = 0;
+    int authAttempts = 0;
+    const int MAX_AUTH_ATTEMPTS = 3;
+    const unsigned long AUTH_RETRY_DELAY = 300000; // 5 minutos
 };
 
 #endif

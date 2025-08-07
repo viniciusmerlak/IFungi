@@ -7,11 +7,13 @@
 class WiFiConfigurator {
 public:
     void startAP(const char* apSSID, const char* apPassword = nullptr);
-    bool connectToWiFi(const char* ssid, const char* password);
+    bool connectToWiFi(const char* ssid, const char* password, bool persist);
+    void reconnectOrFallbackToAP(const char* apSSID, const char* apPassword, const char* storedSSID, const char* storedPassword);
     void stopAP();
     bool isConnected();
     String getLocalIP();
-    
+
+    unsigned long WIFI_CONNECT_TIMEOUT = 15000; // 30 seconds
     void saveCredentials(const char* ssid, const char* password);
     bool loadCredentials(String &ssid, String &password);
     void clearCredentials();

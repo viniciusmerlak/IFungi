@@ -1,38 +1,38 @@
 #include "WebServerHandler.h"
+#include <Preferences.h>
+
+
+void WebServerHandler::handleResetAuth() {
+    firebaseHandler.resetAuthAttempts();
+    Serial.println("Tentativas de autenticação resetadas!");
+    server.send(200, "text/plain", "Tentativas resetadas com sucesso!");
+}
+
+// ... implementações dos outros métodos ...
+bool persistent = true; // ou false, conforme necessário
+bool WebServerHandler::getStoredFirebaseCredentials(String& email, String& password) {
+    return loadFirebaseCredentials(email, password);
+}
 
 WebServerHandler::WebServerHandler(WiFiConfigurator& wifiConfig, FirebaseHandler& fbHandler) 
-    : wifiConfigurator(wifiConfig), firebaseHandler(fbHandler) {}
-
+    : server(80), wifiConfigurator(wifiConfig), firebaseHandler(fbHandler), wifiConnected(false) {
+}
 void WebServerHandler::saveFirebaseCredentials(const String& email, const String& password) {
     Preferences preferences;
     if(!preferences.begin("firebase-creds", false)) {
-        Serial.println("[ERRO] Falha ao abrir namespace das Preferences");
+        Serial.println("[ERRO] Falha ao acessar NVS para salvar credenciais");
         return;
     }
     
-    if(!preferences.putString("email", email)) {
-        Serial.println("[ERRO] Falha ao salvar email");
-    }
-    if(!preferences.putString("password", password)) {
-        Serial.println("[ERRO] Falha ao salvar senha");
-    }
-    
+    preferences.putString("email", email);
+    preferences.putString("password", password);
     preferences.end();
     Serial.println("Credenciais do Firebase salvas com sucesso");
 }
 bool WebServerHandler::loadFirebaseCredentials(String& email, String& password) {
     Preferences preferences;
-    
-    // Tenta abrir o namespace em modo leitura
     if(!preferences.begin("firebase-creds", true)) {
-        Serial.println("[AVISO] Namespace 'firebase-creds' não encontrado. Criando novo...");
-        
-        // Tenta criar o namespace se não existir
-        if(!preferences.begin("firebase-creds", false)) {
-            Serial.println("[ERRO CRÍTICO] Falha ao criar namespace das Preferences");
-            return false;
-        }
-        preferences.end();
+        Serial.println("[AVISO] Namespace 'firebase-creds' não encontrado");
         return false;
     }
     
@@ -42,31 +42,30 @@ bool WebServerHandler::loadFirebaseCredentials(String& email, String& password) 
     
     bool credentialsValid = !email.isEmpty() && !password.isEmpty();
     if(!credentialsValid) {
-        Serial.println("[AVISO] Credenciais não encontradas ou inválidas");
+        static bool warningShown = false;
+        if(!warningShown) {
+            Serial.println("[AVISO] Credenciais do Firebase não configuradas");
+            warningShown = true;
+        }
     }
-    
     return credentialsValid;
 }
 void WebServerHandler::begin(bool wifiConnected) {
     this->wifiConnected = wifiConnected;
-    if(wifiConnected) {
-        String email, password;
-        if(loadFirebaseCredentials(email, password)) {
-            Serial.println("Credenciais do Firebase carregadas da memória");
-            firebaseHandler.begin(FIREBASE_API_KEY, email, password, DATABASE_URL);
-        } else {
-            Serial.println("Nenhuma credencial do Firebase encontrada na memória");
-        }
-    }
-    if(wifiConnected) {
-        server.on("/", HTTP_GET, [this]() { handleFirebaseConfig(); });
-    } else {
-        server.on("/", HTTP_GET, [this]() { handleWiFiConfig(); });
-    }
     
-    server.on("/wifi-config", HTTP_POST, [this]() { handleWiFiConfig(); });
-    server.on("/firebase-config", HTTP_POST, [this]() { handleFirebaseConfig(); });
-    server.onNotFound([this]() { handleNotFound(); });
+    server.on("/", HTTP_GET, [this]() {
+        if(this->wifiConnected) {
+            this->handleFirebaseConfig();
+        } else {
+            this->handleWiFiConfig();
+        }
+    });
+    
+    server.on("/wifi-config", HTTP_POST, [this]() { this->handleWiFiConfig(); });
+    server.on("/firebase-config", HTTP_POST, [this]() { this->handleFirebaseConfig(); });
+    server.on("/reset-auth", HTTP_GET, [this]() { this->handleResetAuth(); });
+    server.onNotFound([this]() { this->handleNotFound(); });
+    
     server.begin();
 }
 
@@ -88,7 +87,7 @@ void WebServerHandler::handleWiFiConfig() {
         String ssid = server.arg("ssid");
         String password = server.arg("password");
         
-        if(wifiConfigurator.connectToWiFi(ssid.c_str(), password.c_str())) {
+        if(wifiConfigurator.connectToWiFi(ssid.c_str(), password.c_str(), persistent=true)) {
             wifiConfigurator.saveCredentials(ssid.c_str(), password.c_str());
             server.send(200, "text/html", 
             "<!DOCTYPE html>"
