@@ -1,0 +1,116 @@
+#include "SensorController.h"
+#include <DHT.h>  // Para DHT22
+
+#define DHTPIN 4      // Pino do DHT22
+#define DHTTYPE DHT22 // Tipo do sensor
+int bcont1 = 0;
+int bcont2 = 0;
+int bcont3 = 0;
+int bcont4 = 0;
+int bcont5 = 0;
+int bcont6 = 0;
+int bcont7 = 0;
+
+
+
+DHT dht(DHTPIN, DHTTYPE);
+
+void SensorController::begin() {
+    Serial.println("Inicializando sensor DHT22");
+    dht.begin();  // Inicializa o sensor DHT22
+    pinMode(LDR_PIN, INPUT); // Configura o pino do LDR como entrada
+    pinMode(MQ7_PIN, INPUT); // Configura o pino do MQ-7 como entrada
+    
+    // Verifica se o DHT22 está respondendo
+    if (isnan(dht.readTemperature())) {
+        while(bcont1 <2) {
+            Serial.println("Falha ao inicializar o DHT22!");
+            bcont1++;
+        }
+
+        dhtOK = false;
+    } else {
+        while(bcont2 <2) {
+            Serial.println("DHT22 inicializado com sucesso!");
+            bcont2++;
+        }
+        dhtOK = true;
+    }
+
+    // Inicialização do sensor CCS811 (CO2 e TVOC)
+    Serial.println("Inicializando sensor CCS811");
+    if (!ccs.begin()) {
+        while(bcont3 <2) {
+            Serial.println("Falha ao inicializar o CCS811!");
+            bcont3++;
+        }
+        ccsOK = false;
+    } else {
+        while(bcont4 <2) {
+            Serial.println("CCS811 inicializado com sucesso!");
+            bcont4++;
+        }
+
+        ccsOK = true;
+        // Aguarda o sensor ficar pronto
+        while(!ccs.available());
+    }
+
+    // Inicialização do sensor MQ-7 (CO)
+    while (bcont5 < 2)
+    {
+        Serial.println("Inicializando sensor MQ-7");
+        bcont5++;
+        /* code */
+    }
+    
+    pinMode(MQ7_PIN, INPUT);
+    while(bcont6<2) {
+        Serial.println("MQ-7 inicializado (aquecimento necessário)");
+        bcont6++;
+    }
+
+
+
+    // Inicialização do LDR (Sensor de luz)
+    while (bcont7 < 2) {
+        Serial.println("Inicializando sensor de luminosidade (LDR)");
+        bcont7++;
+    }
+
+    pinMode(LDR_PIN, INPUT);
+
+
+    // Inicialização de variáveis
+    lastUpdate = 0;
+    co2 = 0;
+    co = 0;
+    temperature = 0;
+    humidity = 0;
+    light = 0;
+}
+
+void SensorController::update() {
+    while (millis() - lastUpdate < 2000) {
+           temperature = dht.readTemperature();
+           humidity = dht.readHumidity();
+        delay(100);
+    }
+    int light = analogRead(LDR_PIN); // Leitura do LDR
+    int co = analogRead(MQ7_PIN); // Leitura do MQ-7 (CO)
+    if (ccsOK && ccs.available()) {
+        co2 = ccs.geteCO2(); // Leitura do CO2
+    } else {
+        co2 = 0; // Se não estiver OK, define como 0
+    }
+    // Atualize outros sensores aqui
+    // co2 = ...;
+    // co = ...;
+    // light = ...;
+}
+
+float SensorController::getTemperature() { return temperature; }
+float SensorController::getHumidity() { return humidity; }
+int SensorController::getCO2() { return co2; }
+int SensorController::getCO() { return co; }
+int SensorController::getLight() { return light; }

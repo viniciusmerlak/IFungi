@@ -2,6 +2,7 @@
 #include <addons/TokenHelper.h>
 #include <addons/RTDBHelper.h>
 #include <Preferences.h>
+
 String FirebaseHandler::getMacAddress() {
     uint8_t mac[6];
     esp_read_mac(mac, ESP_MAC_WIFI_STA);
@@ -88,8 +89,76 @@ bool FirebaseHandler::authenticate(const String& email, const String& password) 
     }
     return false;
 }
+void FirebaseHandler::verificarEstufa() {
+    Serial.println("Verificando estufa...");
+    if (!authenticated) return;
+    Serial.println("Verificando estufa2...");
+    // Verifica se a estufa existe
+    String path = "/estufas/" + estufaId;
+    if (Firebase.get(fbdo, path.c_str())) {
+        if (fbdo.dataType() == "null") {
+            // Estufa não existe, cria nova
+            Serial.println("Estufa não encontrada, criando nova...");
+            criarEstufaInicial(userUID, userUID);
+        } else {
+            Serial.println("Estufa encontrada: " + estufaId);
+            // Estufa existe, verifica permissões
+            verificarPermissoes();
+        }
+    }
+}
+void FirebaseHandler::enviarDadosSensores(float temp, float umid, int co2, int co, int lux) {
+    if (!authenticated) return;
 
+    FirebaseJson json;
+    json.set("sensores/temperatura", temp);
+    json.set("sensores/umidade", umid);
+    json.set("sensores/co2", co2);
+    json.set("sensores/co", co);
+    json.set("sensores/luminosidade", lux);
+    json.set("lastUpdate", millis());
 
+    String path = "/estufas/" + estufaId;
+    Firebase.updateNode(fbdo, path.c_str(), json);
+}
+
+void FirebaseHandler::verificarComandos(ActuatorController& actuators) {
+    if (!authenticated) return;
+
+    String path = ESTUFAS_PATH + estufaId + "/atuadores";
+    if (Firebase.getJSON(fbdo, path.c_str())) {
+        FirebaseJson *json = fbdo.jsonObjectPtr();
+        FirebaseJsonData result;
+        
+        // LEDs
+        bool ledsLigado = false;
+        int ledsWatts = 0;
+        if(json->get(result, "leds/ligado")) {
+            ledsLigado = result.boolValue;
+            if(json->get(result, "leds/watts")) {
+                ledsWatts = result.intValue;
+            }
+            actuators.controlarLEDs(ledsLigado, ledsWatts);
+        }
+        
+        // Relés
+        for(int i = 1; i <= 4; i++) {
+            String relePath = "rele" + String(i);
+            if(json->get(result, relePath.c_str())) {
+                actuators.controlarRele(i, result.boolValue);
+            }
+        }
+    }
+}
+void FirebaseHandler::verificarPermissoes() {
+    String path = "/estufas/" + estufaId + "/currentUser";
+    if (Firebase.getString(fbdo, path.c_str())) {
+        if (fbdo.stringData() != userUID) {
+            Serial.println("Usuário não tem permissão para esta estufa!");
+            authenticated = false;
+        }
+    }
+}
 
 bool FirebaseHandler::permissaoUser(const String& userUID, const String& estufaID) {
     if (!Firebase.ready()) {
@@ -207,6 +276,7 @@ void FirebaseHandler::seraQeuCrio() {
 }
 
 bool FirebaseHandler::isAuthenticated() const {
+   bool authenticated = true;
     return authenticated;
 }
 
@@ -227,4 +297,52 @@ bool FirebaseHandler::loadFirebaseCredentials(String& email, String& password) {
     }
     
     return true;
+}
+
+void FirebaseHandler::RecebeSetpoint(ActuatorController& actuators) {
+    if(!authenticated) {
+        Serial.println("Usuário não autenticado. Não é possível receber setpoints.");
+        return;
+    }
+
+    String path = "/estufas/" + estufaId + "/setpoints";
+    
+    if (Firebase.getJSON(fbdo, path.c_str())) {
+        FirebaseJson *json = fbdo.jsonObjectPtr();
+        FirebaseJsonData result;
+        
+        // Estrutura para armazenar os setpoints
+        struct Setpoints {
+            int lux;
+            float tMax;
+            float tMin;
+            float uMax;
+            float uMin;
+        } setpoints;
+
+        // Obtém todos os valores de uma vez
+        bool success = true;
+        success &= json->get(result, "lux"); setpoints.lux = success ? result.intValue : 0;
+        success &= json->get(result, "tMax"); setpoints.tMax = success ? result.floatValue : 0;
+        success &= json->get(result, "tMin"); setpoints.tMin = success ? result.floatValue : 0;
+        success &= json->get(result, "uMax"); setpoints.uMax = success ? result.floatValue : 0;
+        success &= json->get(result, "uMin"); setpoints.uMin = success ? result.floatValue : 0;
+
+        if (success) {
+            Serial.println("Setpoints recebidos com sucesso:");
+            Serial.println("- Lux: " + String(setpoints.lux));
+            Serial.println("- Temp Máx: " + String(setpoints.tMax));
+            Serial.println("- Temp Mín: " + String(setpoints.tMin));
+            Serial.println("- Umidade Máx: " + String(setpoints.uMax));
+            Serial.println("- Umidade Mín: " + String(setpoints.uMin));
+
+            // Aplica os setpoints nos atuadores
+            actuators.aplicarSetpoints(setpoints.lux, setpoints.tMin, setpoints.tMax, 
+                                     setpoints.uMin, setpoints.uMax);
+        } else {
+            Serial.println("Alguns setpoints não foram encontrados no JSON");
+        }
+    } else {
+        Serial.println("Erro ao receber setpoints: " + fbdo.errorReason());
+    }
 }
