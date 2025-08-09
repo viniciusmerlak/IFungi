@@ -6,6 +6,7 @@ int cont3 = 0;
 void ActuatorController::begin(uint8_t pinLED, uint8_t pinRele1, uint8_t pinRele2, 
                              uint8_t pinRele3, uint8_t pinRele4) {
     Serial.println("Inicializando ActuatorController...");
+    _pinLED = pinLED; // Faltava esta linha
     _pinRele1 = pinRele1;
     _pinRele2 = pinRele2;
     _pinRele3 = pinRele3;
@@ -17,6 +18,11 @@ void ActuatorController::begin(uint8_t pinLED, uint8_t pinRele1, uint8_t pinRele
     pinMode(_pinRele3, OUTPUT);
     pinMode(_pinRele4, OUTPUT);
 }
+
+void ActuatorController::setFirebaseHandler(FirebaseHandler* handler) {
+    firebaseHandler = handler;
+}
+
 void ActuatorController::aplicarSetpoints(int lux, float tMin, float tMax, float uMin, float uMax) {
     // Armazena os setpoints para uso no controle automático
     this->luxSetpoint = lux;
@@ -31,53 +37,94 @@ void ActuatorController::aplicarSetpoints(int lux, float tMin, float tMax, float
 void ActuatorController::controlarLEDs(bool ligado, int watts) {
     while (cont3>2){
         Serial.printf("Controlando LEDs: %s, Watts: %d\n", ligado ? "Ligado" : "Desligado", watts);
+
         cont3++;
     }
     
     digitalWrite(_pinLED, ligado ? HIGH : LOW);
-    // Implemente controle de watts/PWM se necessário
+    analogWrite(_pinLED, watts); // Ajusta a intensidade dos LEDs
+    
+    // Atualiza Firebase após mudança
+    if(firebaseHandler != nullptr) {
+        firebaseHandler->atualizarEstadoAtuadores(
+            digitalRead(_pinRele1) == HIGH,
+            digitalRead(_pinRele2) == HIGH,
+            digitalRead(_pinRele3) == HIGH,
+            digitalRead(_pinRele4) == HIGH,
+            ligado,
+            watts
+        );
+    }
 }
 
 void ActuatorController::controlarRele(uint8_t num, bool estado) {
-
     while (cont1<2) {
         cont1++;
         Serial.printf("Controlando Rele %d: %s\n", num, estado ? "Ligado" : "Desligado");
     }
     
     switch(num) {
-        // Rele 1 Liga e Desliga a Peltier
-        case 1: digitalWrite(_pinRele1, estado ? HIGH : LOW); break;
-        //Rele 2 Escolhe entre Peltier resfriar ou aquecer
-        case 2: digitalWrite(_pinRele2, estado ? HIGH : LOW); break;
-        // Rele 3 Liga e Desliga o Umidificador
-        case 3: digitalWrite(_pinRele3, estado ? HIGH : LOW); break;
-        // Rele 4 Liga e Desliga o Exaustor
-        case 4: digitalWrite(_pinRele4, estado ? HIGH : LOW); break;
+        case 1: 
+            digitalWrite(_pinRele1, estado ? HIGH : LOW); 
+            break;
+        case 2: 
+            digitalWrite(_pinRele2, estado ? HIGH : LOW);
+            break;
+        case 3: 
+            digitalWrite(_pinRele3, estado ? HIGH : LOW);
+            break;
+        case 4: 
+            digitalWrite(_pinRele4, estado ? HIGH : LOW);
+            break;
+    }
+    
+    // Atualiza Firebase após mudança
+    if(firebaseHandler != nullptr) {
+        firebaseHandler->atualizarEstadoAtuadores(
+            digitalRead(_pinRele1) == HIGH,
+            digitalRead(_pinRele2) == HIGH,
+            digitalRead(_pinRele3) == HIGH,
+            digitalRead(_pinRele4) == HIGH,
+            digitalRead(_pinLED) == HIGH,
+            0  // Valor padrão para watts dos LEDs (ajuste conforme necessário)
+        );
     }
 }
 
-void ActuatorController::controlarPeltier(bool resfriar, int potencia) {
+void ActuatorController::controlarPeltier(bool resfriar, bool potencia) {
     if (resfriar) {
         // Modo resfriamento
         digitalWrite(_pinRele1, HIGH);
         digitalWrite(_pinRele2, LOW);
+        AquecerPastilha(false); // Desliga aquecimento
         Serial.println("Peltier em modo resfriamento");
-        delay(1000); // Simula tempo de resfriamento
+        delay(1000); // Simula tempo de resfriament
     } else {
         // Modo aquecimento ou desligado
-        digitalWrite(_pinRele1, LOW);
-        digitalWrite(_pinRele2, potencia > 0 ? HIGH : LOW);
+        AquecerPastilha(true); // Desliga aquecimento se estiver ligado
         Serial.println(potencia > 0 ? "Peltier em modo aquecimento" : "Peltier desligado");
         delay(1000); // Simula tempo de aquecimento
     }
+    if(firebaseHandler != nullptr) {
+        Serial.println("1111111111111111111111111111Atualizando estado dos atuadores no Firebase...");
+        firebaseHandler->atualizarEstadoAtuadores(
+            digitalRead(_pinRele1) == LOW,
+            digitalRead(_pinRele2) == LOW,
+            digitalRead(_pinRele3) == LOW,
+            digitalRead(_pinRele4) == LOW,
+            digitalRead(_pinLED) == LOW,
+            0  // Valor padrão para watts dos LEDs
+        );
+    }
+    delay(1000); // Mantém o delay original
 }
 
 bool ActuatorController::AquecerPastilha(bool ligar) {
     if (ligar) {
         if (!peltierHeating || (millis() - lastPeltierTime > peltierTimeout)) {
             Serial.println("Iniciando aquecimento da pastilha");
-            controlarPeltier(false, 100); // Aquecer em 100%
+            digitalWrite(_pinRele1, HIGH); // Liga o rele da pastilha
+            digitalWrite(_pinRele2, HIGH); //Liga o rele do aquecimento
             lastPeltierTime = millis();
             peltierHeating = true;
             return true;
@@ -88,9 +135,11 @@ bool ActuatorController::AquecerPastilha(bool ligar) {
     } else {
         if (peltierHeating) {
             Serial.println("Desligando aquecimento da pastilha");
-            controlarPeltier(false, 0); // Desligar
+            digitalWrite(_pinRele1,LOW);
+            digitalWrite(_pinRele2,LOW ); // Desliga o rele da pastilha e do aquecimento
+            // Desligar
             peltierHeating = false;
-            delay(1000); // Aguarda antes de permitir novo aquecimento
+            delay(5000); // Aguarda antes de permitir novo aquecimento
         }
         return false;
     }
@@ -98,37 +147,22 @@ bool ActuatorController::AquecerPastilha(bool ligar) {
 
 void ActuatorController::controlarAutomaticamente(float temp, float umid, int luz) {
     Serial.printf("Controlando: Temp=%.2f, Umid=%.2f, Luz=%d\n", temp, umid, luz);
-    
-
-
-    // Controle de Temperatura (Peltier)
-    if (temp > tempMax) {
-        // Resfriar
-        AquecerPastilha(false); // Desliga aquecimento se estiver ligado
-        controlarPeltier(true, 100); // Liga resfriamento
-    } 
-    else if (temp < tempMin) {
-        // Aquecer
-        AquecerPastilha(true);
-    } 
-    else {
-        // Temperatura OK
-        AquecerPastilha(false);
-        controlarPeltier(false, 0); // Desliga completamente
+    if (tempMin>temp) {
+        // Aciona aquecimento
+        Serial.println("###############################Temperatura abaixo do mínimo, aquecendo##########################");
+        bool resfriar = false;
+        controlarPeltier(resfriar, false);
+    } else if (temp > tempMax) {
+        Serial.println("###############################Temperatura acima do máximo, resfriando##########################");
+        // Aciona resfriamento
+        bool resfriar = true;
+        controlarPeltier(resfriar, false);
+    } else {
+        Serial.println("###############################Temperatura dentro do intervalo, desligando peltier##########################");
+        // Temperatura ok, desliga peltier
+        controlarPeltier(false, false);
     }
 
-    // Controle de Umidade
-    if (umid < umidMin) {
-        controlarRele(3, true); // Liga umidificador
-    } 
-    else if (umid > umidMax) {
-        controlarRele(3, false); // Desliga umidificador
-    }
-
-    // Controle de Luz (exemplo)
-    int luzNecessaria = max(0, luxSetpoint - luz);
-    controlarLEDs(luzNecessaria > 0, luzNecessaria);
-    delay(1000); // Aguarda 1 segundo antes de nova leitura
 }
 /*
 

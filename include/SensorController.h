@@ -16,10 +16,10 @@ public:
     
 private:
     // Defina os pinos conforme sua montagem
-    static const uint8_t DHT_PIN = 4;    // Pino do DHT22
-    static const uint8_t MQ7_PIN = 34;   // Pino analógico do MQ-7
-    static const uint8_t LDR_PIN = 35;   // Pino analógico do LDR
-    static const uint8_t WATERLEVEL_PIN = 32; // Pino do sensor de nível de água
+    static const uint8_t MQ7_PIN = 32;   // Pino analógico do MQ-7
+    static const uint8_t DHT_PIN = 33;    // Pino do DHT22
+    static const uint8_t LDR_PIN = 34;   // Pino analógico do LDR
+    static const uint8_t WATERLEVEL_PIN = 35; // Pino do sensor de nível de água
     
     // Objetos dos sensores
     DHT dht{DHT_PIN, DHT22};

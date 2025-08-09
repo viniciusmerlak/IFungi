@@ -2,3 +2,12 @@ rele1=EnergiPELT
 rele2=DeltaPELT
 rele3=Umidficador
 rele4=exaustor
+
+rele1 =pin D23
+Rele2 = pin D14
+Rele3 = pin D18
+Rele4 = pin D19
+LDR = D34 GPIX 34
+DHT = D33 GPIO33
+MQ-07 = D32 GPIO32
+LED = D4 GPIO4

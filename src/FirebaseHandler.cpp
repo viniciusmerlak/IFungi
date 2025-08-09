@@ -3,6 +3,8 @@
 #include <addons/RTDBHelper.h>
 #include <Preferences.h>
 
+
+
 String FirebaseHandler::getMacAddress() {
     uint8_t mac[6];
     esp_read_mac(mac, ESP_MAC_WIFI_STA);
@@ -14,34 +16,22 @@ String FirebaseHandler::getMacAddress() {
 
 void FirebaseHandler::begin(const String &apiKey, const String &email, 
                           const String &password, const String &databaseUrl) {
+    if(initialized) {
+        Serial.println("Firebase já inicializado");
+        return;
+    }
+    
     config.api_key = apiKey.c_str();
-    auth.user.email = email.c_str();
-    auth.user.password = password.c_str();
     config.database_url = databaseUrl.c_str();
     config.token_status_callback = tokenStatusCallback;
-
+    
     Firebase.reconnectNetwork(true);
     Serial.println("Inicializando Firebase...");
     
-    Firebase.begin(&config, &auth);
+    // Apenas inicializa, não autentica ainda
+    Firebase.begin(&config, nullptr);
     Firebase.setDoubleDigits(2);
-
-    int attempts = 0;
-    while (!Firebase.ready() && attempts < 10) {
-        delay(500);
-        Serial.print(".");
-        attempts++;
-    }
-
-    authenticated = Firebase.ready();
-    if (authenticated) {
-        userUID = String(auth.token.uid.c_str());
-        estufaId = "IFUNGI-" + getMacAddress();
-        Serial.println("\nAutenticado com sucesso!");
-        Serial.print("UID: "); Serial.println(userUID);
-    } else {
-        Serial.println("\nFalha na autenticação inicial");
-    }
+    initialized = true;
 }
 
 
@@ -52,9 +42,13 @@ void FirebaseHandler::resetAuthAttempts() {
 }
 
 bool FirebaseHandler::authenticate(const String& email, const String& password) {
-    if (authAttempts >= MAX_AUTH_ATTEMPTS) {
+    // Limpa estado anterior
+    authenticated = false;
+
+    // Verifica tentativas máximas
+    if(authAttempts >= MAX_AUTH_ATTEMPTS) {
         unsigned long waitTime = millis() - lastAuthAttempt;
-        if (waitTime < AUTH_RETRY_DELAY) {
+        if(waitTime < AUTH_RETRY_DELAY) {
             Serial.printf("Aguarde %lu segundos antes de tentar novamente\n", 
                         (AUTH_RETRY_DELAY - waitTime)/1000);
             return false;
@@ -66,49 +60,101 @@ bool FirebaseHandler::authenticate(const String& email, const String& password) 
     lastAuthAttempt = millis();
 
     Serial.println("Tentando autenticar no Firebase...");
+    
+    // Configura credenciais
     auth.user.email = email.c_str();
     auth.user.password = password.c_str();
+    
+    // Inicializa Firebase com autenticação
     Firebase.begin(&config, &auth);
-
+    
+    // Aguarda autenticação
     unsigned long startTime = millis();
-    while (!Firebase.ready() && (millis() - startTime < 10000)) {
+    while(!Firebase.ready() && (millis() - startTime < 10000)) {
         delay(100);
     }
 
-    if (Firebase.ready()) {
-        authenticated = true;
+    // Verifica resultado
+    authenticated = Firebase.ready();
+    if(authenticated) {
         userUID = String(auth.token.uid.c_str());
-        authAttempts = 0;
+        estufaId = "IFUNGI-" + getMacAddress();
         Serial.println("Autenticação bem-sucedida!");
+        Serial.print("UID: "); Serial.println(userUID);
+        authAttempts = 0;
         return true;
+    } else {
+        Serial.println("Falha na autenticação: ");
+        return false;
+    }
+}
+
+void FirebaseHandler::atualizarEstadoAtuadores(bool rele1, bool rele2, bool rele3, bool rele4, 
+                                             bool ledsLigado, int ledsWatts) {
+    if (!authenticated || !Firebase.ready()) {
+        Serial.println("Não autenticado para atualizar atuadores");
+        return;
     }
 
-    Serial.printf("Falha na autenticação (%d/%d tentativas)\n", authAttempts, MAX_AUTH_ATTEMPTS);
-    if (authAttempts >= MAX_AUTH_ATTEMPTS) {
-        Serial.println("Máximo de tentativas atingido. Use /reset-auth para resetar.");
+    FirebaseJson json;
+    FirebaseJson atuadores;
+    
+    // Adiciona estados dos relés
+    atuadores.set("rele1", rele1);
+    atuadores.set("rele2", rele2);
+    atuadores.set("rele3", rele3);
+    atuadores.set("rele4", rele4);
+    
+    // Adiciona estado dos LEDs
+    FirebaseJson leds;
+    leds.set("ligado", ledsLigado);
+    leds.set("watts", ledsWatts);
+    atuadores.set("leds", leds);
+    
+    // Adiciona timestamp
+    json.set("lastUpdate", millis());
+    json.set("atuadores", atuadores);
+
+    String path = FirebaseHandler::getEstufasPath() + estufaId;
+    
+    if (Firebase.updateNode(fbdo, path.c_str(), json)) {
+        Serial.println("Estados dos atuadores atualizados com sucesso!");
+    } else {
+        Serial.println("Falha ao atualizar atuadores: " + fbdo.errorReason());
     }
-    return false;
 }
+
+void FirebaseHandler::refreshTokenIfNeeded() {
+    if(!initialized || !authenticated) return;
+    
+    if(millis() - lastTokenRefresh > TOKEN_REFRESH_INTERVAL) {
+        Serial.println("Atualizando token Firebase...");
+        Firebase.refreshToken(&config);
+        lastTokenRefresh = millis();
+    }
+}
+
 void FirebaseHandler::verificarEstufa() {
+    if(!authenticated) {
+        Serial.println("Usuário não autenticado. Verifique as credenciais.");
+        return;
+    }
+    
     Serial.println("Verificando estufa...");
-    if (!authenticated) return;
-    Serial.println("Verificando estufa2...");
-    // Verifica se a estufa existe
-    String path = "/estufas/" + estufaId;
-    if (Firebase.get(fbdo, path.c_str())) {
-        if (fbdo.dataType() == "null") {
-            // Estufa não existe, cria nova
-            Serial.println("Estufa não encontrada, criando nova...");
-            criarEstufaInicial(userUID, userUID);
-        } else {
-            Serial.println("Estufa encontrada: " + estufaId);
-            // Estufa existe, verifica permissões
-            verificarPermissoes();
-        }
+    if(estufaExiste(estufaId)) {
+        Serial.println("Estufa encontrada: " + estufaId);
+        verificarPermissoes();
+    } else {
+        Serial.println("Estufa não encontrada, criando nova...");
+        criarEstufaInicial(userUID, userUID);
     }
 }
 void FirebaseHandler::enviarDadosSensores(float temp, float umid, int co2, int co, int lux) {
-    if (!authenticated) return;
+    refreshTokenIfNeeded(); // Verifica o token antes de cada operação
+    if (!authenticated || !Firebase.ready()) {
+       Serial.println("Não autenticado ou token inválido");
+        return;
+    }
 
     FirebaseJson json;
     json.set("sensores/temperatura", temp);
@@ -122,10 +168,23 @@ void FirebaseHandler::enviarDadosSensores(float temp, float umid, int co2, int c
     Firebase.updateNode(fbdo, path.c_str(), json);
 }
 
+void FirebaseHandler::handleTokenError() {
+    if (!Firebase.ready()) {
+        Serial.println("Token inválido ou expirado. Tentando reautenticar...");
+        authenticated = false;
+        if (authenticate(auth.user.email.c_str(), auth.user.password.c_str())) {
+            Serial.println("Reautenticação bem-sucedida.");
+            verificarEstufa();
+        } else {
+            Serial.println("Falha na reautenticação.");
+        }
+    }
+}
+
 void FirebaseHandler::verificarComandos(ActuatorController& actuators) {
     if (!authenticated) return;
 
-    String path = ESTUFAS_PATH + estufaId + "/atuadores";
+    String path = FirebaseHandler::getEstufasPath() + estufaId + "/atuadores"; // Modifique esta linha
     if (Firebase.getJSON(fbdo, path.c_str())) {
         FirebaseJson *json = fbdo.jsonObjectPtr();
         FirebaseJsonData result;
@@ -208,6 +267,11 @@ void FirebaseHandler::criarEstufaInicial(const String& usuarioCriador, const Str
         Serial.println("Usuário não autenticado.");
         return;
     }
+    if (!initialized) {
+        Serial.println("Firebase não inicializado.");
+
+        return;
+    }
     permissaoUser(userUID, estufaId);
 
     FirebaseJson json;
@@ -276,14 +340,12 @@ void FirebaseHandler::seraQeuCrio() {
 }
 
 bool FirebaseHandler::isAuthenticated() const {
-   bool authenticated = true;
-    return authenticated;
+    return authenticated; // Remover a declaração local que sobrescrevia
 }
-
 bool FirebaseHandler::loadFirebaseCredentials(String& email, String& password) {
     Preferences preferences;
     if(!preferences.begin("firebase-creds", true)) {
-        Serial.println("[ERRO] Falha ao abrir preferences");
+        Serial.println("Erro ao acessar preferências");
         return false;
     }
     
@@ -292,10 +354,10 @@ bool FirebaseHandler::loadFirebaseCredentials(String& email, String& password) {
     preferences.end();
     
     if(email.isEmpty() || password.isEmpty()) {
-        Serial.println("[AVISO] Credenciais do Firebase não encontradas");
+        Serial.println("Nenhuma credencial encontrada");
         return false;
     }
-    
+    begin(FIREBASE_API_KEY, email, password, DATABASE_URL);
     return true;
 }
 

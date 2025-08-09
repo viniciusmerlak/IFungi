@@ -1,8 +1,8 @@
-// ActuatorController.h
 #ifndef ACTUATOR_CONTROLLER_H
 #define ACTUATOR_CONTROLLER_H
-
+#include "FirebaseHandler.h"
 #include <Arduino.h>
+class FirebaseHandler;  // Forward declaration
 
 class ActuatorController {
 public:
@@ -11,14 +11,16 @@ public:
     void aplicarSetpoints(int lux, float tMin, float tMax, float uMin, float uMax);
     void controlarLEDs(bool ligado, int watts);
     void controlarRele(uint8_t num, bool estado);
-    void controlarPeltier(bool resfriar, int potencia);
+    void controlarPeltier(bool resfriar, bool potencia);
     void controlarUmidificador(bool ligado);
     void controlarExaustor(bool ligado);
     bool AquecerPastilha(bool);
-    // void controlarGases(int co2, int co);//nao implementado ainda
-    unsigned long tempo = 0;
-    unsigned long tempo2 = 10000;
- private:
+    void setFirebaseHandler(FirebaseHandler* handler);  // Adicione esta linha
+    
+private:
+    FirebaseHandler* firebaseHandler = nullptr;  // Adicione esta linha
+    unsigned long lastFirebaseUpdate = 0;
+    const unsigned long UPDATE_INTERVAL = 2000; // 2 segundos
     uint8_t _pinLED;
     uint8_t _pinRele1;
     uint8_t _pinRele2;
@@ -32,8 +34,6 @@ public:
     unsigned long lastPeltierTime = 0;
     const unsigned long peltierTimeout = 10000; // 10 segundos
     bool peltierHeating = false;
-
-    // Adicione outros pinos necessários
 };
 
 #endif

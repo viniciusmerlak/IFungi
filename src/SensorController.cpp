@@ -1,7 +1,7 @@
 #include "SensorController.h"
 #include <DHT.h>  // Para DHT22
 
-#define DHTPIN 4      // Pino do DHT22
+#define DHTPIN 33      // Pino do DHT22
 #define DHTTYPE DHT22 // Tipo do sensor
 int bcont1 = 0;
 int bcont2 = 0;
@@ -91,22 +91,22 @@ void SensorController::begin() {
 }
 
 void SensorController::update() {
-    while (millis() - lastUpdate < 2000) {
-           temperature = dht.readTemperature();
-           humidity = dht.readHumidity();
-        delay(100);
+    // Garante leitura a cada 2 segundos
+    if(millis() - lastUpdate >= 2000) {
+        if(dhtOK) {
+            temperature = dht.readTemperature();
+            humidity = dht.readHumidity();
+        }
+        
+        light = analogRead(LDR_PIN);
+        co = analogRead(MQ7_PIN);
+        
+        if(ccsOK && ccs.available()) {
+            co2 = ccs.geteCO2();
+        }
+        
+        lastUpdate = millis();
     }
-    int light = analogRead(LDR_PIN); // Leitura do LDR
-    int co = analogRead(MQ7_PIN); // Leitura do MQ-7 (CO)
-    if (ccsOK && ccs.available()) {
-        co2 = ccs.geteCO2(); // Leitura do CO2
-    } else {
-        co2 = 0; // Se não estiver OK, define como 0
-    }
-    // Atualize outros sensores aqui
-    // co2 = ...;
-    // co = ...;
-    // light = ...;
 }
 
 float SensorController::getTemperature() { return temperature; }
