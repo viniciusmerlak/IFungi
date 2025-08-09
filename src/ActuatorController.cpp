@@ -46,14 +46,25 @@ void ActuatorController::controlarLEDs(bool ligado, int watts) {
     
     // Atualiza Firebase após mudança
     if(firebaseHandler != nullptr) {
+        pinMode(_pinRele1, INPUT);
+        pinMode(_pinRele2, INPUT);
+        pinMode(_pinRele3, INPUT);
+        pinMode(_pinRele4, INPUT);
         firebaseHandler->atualizarEstadoAtuadores(
-            digitalRead(_pinRele1) == HIGH,
-            digitalRead(_pinRele2) == HIGH,
-            digitalRead(_pinRele3) == HIGH,
-            digitalRead(_pinRele4) == HIGH,
+
+
+            digitalRead(_pinRele1),
+            digitalRead(_pinRele2),
+            digitalRead(_pinRele3),
+            digitalRead(_pinRele4),
+
             ligado,
             watts
         );
+        pinMode(_pinRele1, OUTPUT);
+        pinMode(_pinRele2, OUTPUT);
+        pinMode(_pinRele3, OUTPUT);
+        pinMode(_pinRele4, OUTPUT);
     }
 }
 
@@ -80,14 +91,27 @@ void ActuatorController::controlarRele(uint8_t num, bool estado) {
     
     // Atualiza Firebase após mudança
     if(firebaseHandler != nullptr) {
+        pinMode(_pinRele1, INPUT);
+        pinMode(_pinRele2, INPUT);
+        pinMode(_pinRele3, INPUT);
+        pinMode(_pinRele4, INPUT);
+        bool ligado = true;
+        int watts = 0; // Valor padrão para watts dos LEDs
         firebaseHandler->atualizarEstadoAtuadores(
-            digitalRead(_pinRele1) == HIGH,
-            digitalRead(_pinRele2) == HIGH,
-            digitalRead(_pinRele3) == HIGH,
-            digitalRead(_pinRele4) == HIGH,
-            digitalRead(_pinLED) == HIGH,
-            0  // Valor padrão para watts dos LEDs (ajuste conforme necessário)
+
+
+            digitalRead(_pinRele1),
+            digitalRead(_pinRele2),
+            digitalRead(_pinRele3),
+            digitalRead(_pinRele4),
+
+            ligado,
+            watts
         );
+        pinMode(_pinRele1, OUTPUT);
+        pinMode(_pinRele2, OUTPUT);
+        pinMode(_pinRele3, OUTPUT);
+        pinMode(_pinRele4, OUTPUT);
     }
 }
 
@@ -108,11 +132,11 @@ void ActuatorController::controlarPeltier(bool resfriar, bool potencia) {
     if(firebaseHandler != nullptr) {
         Serial.println("1111111111111111111111111111Atualizando estado dos atuadores no Firebase...");
         firebaseHandler->atualizarEstadoAtuadores(
-            digitalRead(_pinRele1) == LOW,
-            digitalRead(_pinRele2) == LOW,
-            digitalRead(_pinRele3) == LOW,
-            digitalRead(_pinRele4) == LOW,
-            digitalRead(_pinLED) == LOW,
+            digitalRead(_pinRele1),
+            digitalRead(_pinRele2),
+            digitalRead(_pinRele3),
+            digitalRead(_pinRele4),
+            digitalRead(_pinLED),
             0  // Valor padrão para watts dos LEDs
         );
     }
