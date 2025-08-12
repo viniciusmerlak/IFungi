@@ -15,7 +15,17 @@ FirebaseHandler firebase;
 WebServerHandler webServer(wifiConfig, firebase);
 SensorController sensors;
 ActuatorController actuators;
+void memateRapido();
 
+
+void memateRapido(){
+    String email, password;
+    Serial.println("iniciando loop até loadFirebaseCredentials retornar true");
+    while(!firebase.loadFirebaseCredentials(email,password)){
+        Serial.print(".");
+        webServer.begin(true); //ta conectado ao wifi entao pro firebase ficar ligado tem que ta true
+    }
+}
 
 
 void setup() {
@@ -41,7 +51,13 @@ void setup() {
             // Tenta autenticar com credenciais salvas
             String email, password;
             if(firebase.loadFirebaseCredentials(email, password)) {
+                Serial.println("loadFirebase retournou verdade");
                 firebase.authenticate(email, password);
+            }else{
+                Serial.println("loadFirebase retornou falso  iniciado a função do server do firebase sla");
+                memateRapido();
+                
+
             }
             return;
         }

@@ -12,8 +12,10 @@ String FirebaseHandler::getMacAddress() {
     return String(macStr);
 }
 
-void FirebaseHandler::begin(const String &apiKey, const String &email, 
-                          const String &password, const String &databaseUrl) {
+void FirebaseHandler::begin(const String &apiKey, const String &email, const String &password, const String &databaseUrl) {
+  
+    Serial.println("Begin Recebendo email:" + email);
+    Serial.println("Recebendo Senha:" + password);
     config.api_key = apiKey.c_str();
     auth.user.email = email.c_str();
     auth.user.password = password.c_str();
@@ -72,6 +74,7 @@ bool FirebaseHandler::authenticate(const String& email, const String& password) 
 
     unsigned long startTime = millis();
     while (!Firebase.ready() && (millis() - startTime < 10000)) {
+        Serial.print(".");
         delay(100);
     }
 
