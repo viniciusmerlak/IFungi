@@ -3,8 +3,9 @@
 
 #include "perdiavontadedeviver.h"
 #include <FirebaseESP32.h>
-#include "ActuatorController.h"
-
+#include <nvs_flash.h>
+#include "ActuatorController.h"  // Inclua o header completo aqui
+// Forward declaration para evitar dependência circular
 class ActuatorController;
 
 class FirebaseHandler {

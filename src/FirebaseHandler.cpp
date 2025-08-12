@@ -14,13 +14,10 @@ String FirebaseHandler::getMacAddress() {
     return String(macStr);
 }
 
-void FirebaseHandler::begin(const String &apiKey, const String &email, 
-                          const String &password, const String &databaseUrl) {
-    if(initialized) {
-        Serial.println("Firebase já inicializado");
-        return;
-    }
-    
+void FirebaseHandler::begin(const String &apiKey, const String &email, const String &password, const String &databaseUrl) {
+  
+    Serial.println("Begin Recebendo email:" + email);
+    Serial.println("Recebendo Senha:" + password);
     config.api_key = apiKey.c_str();
     config.database_url = databaseUrl.c_str();
     config.token_status_callback = tokenStatusCallback;
@@ -70,7 +67,8 @@ bool FirebaseHandler::authenticate(const String& email, const String& password) 
     
     // Aguarda autenticação
     unsigned long startTime = millis();
-    while(!Firebase.ready() && (millis() - startTime < 10000)) {
+    while (!Firebase.ready() && (millis() - startTime < 10000)) {
+        Serial.print(".");
         delay(100);
     }
 
@@ -345,7 +343,9 @@ bool FirebaseHandler::isAuthenticated() const {
 bool FirebaseHandler::loadFirebaseCredentials(String& email, String& password) {
     Preferences preferences;
     if(!preferences.begin("firebase-creds", true)) {
-        Serial.println("Erro ao acessar preferências");
+        Serial.println("[ERRO] Falha ao abrir preferences");
+        nvs_flash_erase(); // erase the NVS partition and...
+        nvs_flash_init(); // initialize the NVS partition.
         return false;
     }
     
