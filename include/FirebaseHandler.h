@@ -15,7 +15,8 @@ public:
     bool authenticate(const String& email, const String& password);
     void resetAuthAttempts();
     void atualizarEstadoAtuadores(bool rele1, bool rele2, bool rele3, bool rele4, bool ledsLigado, int ledsWatts);
-    
+    // No FirebaseHandler.h, adicione na seção pública:
+    void saveFirebaseCredentials(const String& email, const String& password);      
     // Gerenciamento de estufa
     bool permissaoUser(const String& userUID, const String& estufaID);
     void criarEstufaInicial(const String& usuarioCriador, const String& usuarioAtual);
@@ -30,7 +31,7 @@ public:
     void enviarDadosSensores(float temp, float umid, int co2, int co, int lux);
     void verificarComandos(ActuatorController& actuators);
     void RecebeSetpoint(ActuatorController& actuators);
-    
+    bool initPreferencesNamespace();
     // Funções auxiliares
     void seraQeuCrio();
     bool loadFirebaseCredentials(String& email, String& password);

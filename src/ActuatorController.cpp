@@ -1,5 +1,7 @@
 // ActuatorController.cpp
 #include "ActuatorController.h"
+FirebaseHandler firebase; // Declaração antecipada
+
 int cont1 = 0;
 int cont2 = 0;
 int cont3 = 0;
@@ -46,10 +48,15 @@ void ActuatorController::controlarLEDs(bool ligado, int watts) {
     
     // Atualiza Firebase após mudança
     if(firebaseHandler != nullptr) {
+        if(!firebase.authenticated) {
+            Serial.println("Usuário não autenticado. Não será possível atualizar estado dos atuadores.");
+            return;
+        }
         pinMode(_pinRele1, INPUT);
         pinMode(_pinRele2, INPUT);
         pinMode(_pinRele3, INPUT);
         pinMode(_pinRele4, INPUT);
+        
         firebaseHandler->atualizarEstadoAtuadores(
 
 
@@ -91,12 +98,17 @@ void ActuatorController::controlarRele(uint8_t num, bool estado) {
     
     // Atualiza Firebase após mudança
     if(firebaseHandler != nullptr) {
+        if (!firebase.authenticated){
+            Serial.println("Usuário não autenticado. Não será possível atualizar estado dos atuadores.");
+            return;
+        }
         pinMode(_pinRele1, INPUT);
         pinMode(_pinRele2, INPUT);
         pinMode(_pinRele3, INPUT);
         pinMode(_pinRele4, INPUT);
         bool ligado = true;
         int watts = 0; // Valor padrão para watts dos LEDs
+
         firebaseHandler->atualizarEstadoAtuadores(
 
 
@@ -131,6 +143,10 @@ void ActuatorController::controlarPeltier(bool resfriar, bool potencia) {
     }
     if(firebaseHandler != nullptr) {
         Serial.println("1111111111111111111111111111Atualizando estado dos atuadores no Firebase...");
+        if(!firebase.authenticated) {
+            Serial.println("Usuário não autenticado. Não será possível atualizar estado dos atuadores.");
+            return;
+        }
         firebaseHandler->atualizarEstadoAtuadores(
             digitalRead(_pinRele1),
             digitalRead(_pinRele2),

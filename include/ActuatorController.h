@@ -1,7 +1,8 @@
 #ifndef ACTUATOR_CONTROLLER_H
 #define ACTUATOR_CONTROLLER_H
-#include "FirebaseHandler.h"
+
 #include <Arduino.h>
+#include "FirebaseHandler.h"
 class FirebaseHandler;  // Forward declaration
 
 class ActuatorController {

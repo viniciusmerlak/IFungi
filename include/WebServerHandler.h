@@ -20,7 +20,10 @@ public:
     void handleClient();
     bool getStoredFirebaseCredentials(String& email, String& password);
     void handleResetAuth();
+    String successPage(const String& title, const String& message);
     String errorPage(const String& message);
+    void handleWiFiConfigPost();
+    void handleFirebaseConfigPost();
 
 private:
     // Membros privados
@@ -30,6 +33,7 @@ private:
     bool wifiConnected;
 
     // Métodos privados
+    void configureRoutes();
     void saveFirebaseCredentials(const String& email, const String& password);
     bool loadFirebaseCredentials(String& email, String& password);
     void handleRoot();

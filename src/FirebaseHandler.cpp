@@ -45,21 +45,13 @@ bool FirebaseHandler::authenticate(const String& email, const String& password) 
     // Limpa estado anterior
     authenticated = false;
 
-    // Verifica tentativas máximas
-    if(authAttempts >= MAX_AUTH_ATTEMPTS) {
-        unsigned long waitTime = millis() - lastAuthAttempt;
-        if(waitTime < AUTH_RETRY_DELAY) {
-            Serial.printf("Aguarde %lu segundos antes de tentar novamente\n", 
-                        (AUTH_RETRY_DELAY - waitTime)/1000);
-            return false;
-        }
-        authAttempts = 0;
+    // Verificação básica de input
+    if(email.isEmpty() || password.isEmpty() || email.indexOf('@') == -1) {
+        Serial.println("[ERRO] Credenciais inválidas fornecidas");
+        return false;
     }
 
-    authAttempts++;
-    lastAuthAttempt = millis();
-
-    Serial.println("Tentando autenticar no Firebase...");
+    Serial.println("[INFO] Tentando autenticar no Firebase...");
     
     // Configura credenciais
     auth.user.email = email.c_str();
@@ -68,10 +60,11 @@ bool FirebaseHandler::authenticate(const String& email, const String& password) 
     // Inicializa Firebase com autenticação
     Firebase.begin(&config, &auth);
     
-    // Aguarda autenticação
+    // Aguarda autenticação com timeout
     unsigned long startTime = millis();
-    while(!Firebase.ready() && (millis() - startTime < 10000)) {
-        delay(100);
+    while(!Firebase.ready() && (millis() - startTime < 15000)) { // 15s timeout
+        delay(250);
+        Serial.print(".");
     }
 
     // Verifica resultado
@@ -79,20 +72,31 @@ bool FirebaseHandler::authenticate(const String& email, const String& password) 
     if(authenticated) {
         userUID = String(auth.token.uid.c_str());
         estufaId = "IFUNGI-" + getMacAddress();
-        Serial.println("Autenticação bem-sucedida!");
-        Serial.print("UID: "); Serial.println(userUID);
-        authAttempts = 0;
+        Serial.println("\n[SUCESSO] Autenticação Firebase OK");
+        Serial.print("[INFO] UID: "); Serial.println(userUID);
+        
+        // Salva credenciais apenas após autenticação bem-sucedida
+        saveFirebaseCredentials(email, password);
         return true;
-    } else {
-        Serial.println("Falha na autenticação: ");
-        return false;
+    } 
+    
+    Serial.println("\n[ERRO] Falha na autenticação");
+    if(fbdo.errorReason().length() > 0) {
+        Serial.print("[ERRO] Motivo: ");
+        Serial.println(fbdo.errorReason());
     }
+    return false;
 }
 
 void FirebaseHandler::atualizarEstadoAtuadores(bool rele1, bool rele2, bool rele3, bool rele4, 
                                              bool ledsLigado, int ledsWatts) {
-    if (!authenticated || !Firebase.ready()) {
-        Serial.println("Não autenticado para atualizar atuadores");
+    // Verificação robusta de autenticação
+    if (!isAuthenticated() || !Firebase.ready()) {
+        static unsigned long lastWarning = 0;
+        if(millis() - lastWarning > 60000) { // Avisa a cada 1 minuto
+            Serial.println("[AVISO] Não autenticado para atualizar atuadores");
+            lastWarning = millis();
+        }
         return;
     }
 
@@ -115,12 +119,16 @@ void FirebaseHandler::atualizarEstadoAtuadores(bool rele1, bool rele2, bool rele
     json.set("lastUpdate", millis());
     json.set("atuadores", atuadores);
 
-    String path = FirebaseHandler::getEstufasPath() + estufaId;
+    String path = getEstufasPath() + estufaId;
     
     if (Firebase.updateNode(fbdo, path.c_str(), json)) {
-        Serial.println("Estados dos atuadores atualizados com sucesso!");
+        Serial.println("[INFO] Estados dos atuadores atualizados com sucesso!");
     } else {
-        Serial.println("Falha ao atualizar atuadores: " + fbdo.errorReason());
+        Serial.println("[ERRO] Falha ao atualizar atuadores: " + fbdo.errorReason());
+        // Tenta reautenticar em caso de falha
+        if(fbdo.errorReason().indexOf("token") != -1) {
+            authenticated = false;
+        }
     }
 }
 
@@ -150,6 +158,10 @@ void FirebaseHandler::verificarEstufa() {
     }
 }
 void FirebaseHandler::enviarDadosSensores(float temp, float umid, int co2, int co, int lux) {
+    if(!authenticated) {
+        Serial.println("Usuário não autenticado. Dados não enviados.");
+        return;
+    }
     refreshTokenIfNeeded(); // Verifica o token antes de cada operação
     if (!authenticated || !Firebase.ready()) {
        Serial.println("Não autenticado ou token inválido");
@@ -342,22 +354,100 @@ void FirebaseHandler::seraQeuCrio() {
 bool FirebaseHandler::isAuthenticated() const {
     return authenticated; // Remover a declaração local que sobrescrevia
 }
+
+// Adicione esta implementação:
+void FirebaseHandler::saveFirebaseCredentials(const String& email, const String& password) {
+    Preferences preferences;
+    
+    // Abre em modo leitura/escrita (cria se não existir)
+    if(!preferences.begin("firebase-creds", false)) {
+        Serial.println("[NVS ERRO] Falha ao acessar namespace");
+        return;
+    }
+    
+    // Verifica se os valores são válidos antes de salvar
+    if(email.length() == 0 || email.indexOf('@') == -1 || password.length() == 0) {
+        Serial.println("[NVS ERRO] Tentativa de salvar credenciais inválidas");
+        preferences.end();
+        return;
+    }
+    
+    // Salva as credenciais
+    preferences.putString("email", email);
+    preferences.putString("password", password);
+    
+    // Confirmação imediata
+    if(preferences.getString("email", "") != email || 
+       preferences.getString("password", "") != password) {
+        Serial.println("[NVS ERRO] Falha na verificação das credenciais salvas");
+        preferences.clear();
+    } else {
+        Serial.println("[NVS] Credenciais salvas com sucesso");
+    }
+    
+    preferences.end();
+}
 bool FirebaseHandler::loadFirebaseCredentials(String& email, String& password) {
     Preferences preferences;
+    
+    // Primeiro verifica se o namespace existe
     if(!preferences.begin("firebase-creds", true)) {
-        Serial.println("Erro ao acessar preferências");
+        Serial.println("[NVS] Namespace 'firebase-creds' não existe ainda");
         return false;
     }
     
+    // Verifica se as chaves existem antes de tentar ler
+    if(!preferences.isKey("email") || !preferences.isKey("password")) {
+        Serial.println("[NVS] Credenciais não encontradas (primeira execução)");
+        preferences.end();
+        return false;
+    }
+    
+    // Se chegou aqui, as chaves existem - pode ler com segurança
     email = preferences.getString("email", "");
     password = preferences.getString("password", "");
     preferences.end();
     
     if(email.isEmpty() || password.isEmpty()) {
-        Serial.println("Nenhuma credencial encontrada");
+        Serial.println("[NVS] Credenciais vazias");
         return false;
     }
-    begin(FIREBASE_API_KEY, email, password, DATABASE_URL);
+    
+    return true;
+}
+
+
+bool FirebaseHandler::initPreferencesNamespace() {
+    Preferences preferences;
+    
+    // Tentativa de abrir em modo leitura/escrita (cria se não existir)
+    if(!preferences.begin("firebase-creds", false)) {
+        Serial.println("[ERRO CRÍTICO] Falha ao criar/abrir namespace 'firebase-creds'");
+        return false;
+    }
+    
+    // Verificação robusta para determinar se o namespace está vazio
+    bool namespaceVazio = true;
+    
+    // Verifica algumas chaves conhecidas
+    if(preferences.isKey("email") || preferences.isKey("password")) {
+        namespaceVazio = false;
+    }
+    // Verificação adicional para outras chaves que você possa usar
+    else if(preferences.isKey("wifi_ssid") || preferences.isKey("wifi_pass")) {
+        namespaceVazio = false;
+    }
+    
+    if(namespaceVazio) {
+        Serial.println("[NVS] Namespace criado (vazio) - primeira execução?");
+        
+        // Opcional: cria entradas padrão se necessário
+        preferences.putString("init_flag", "initialized");
+    } else {
+        Serial.println("[NVS] Namespace aberto (contém dados)");
+    }
+    
+    preferences.end();
     return true;
 }
 

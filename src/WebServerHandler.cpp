@@ -1,5 +1,8 @@
 #include "WebServerHandler.h"
 #include <Preferences.h>
+#include <DNSServer.h>
+const byte DNS_PORT = 53;
+DNSServer dnsServer;
 const String WebServerHandler::FIREBASE_API_KEY = "AIzaSyDkPzzLHykaH16FsJpZYwaNkdTuOOmfnGE";
 const String WebServerHandler::DATABASE_URL = "pfi-ifungi-default-rtdb.firebaseio.com";
 
@@ -39,7 +42,7 @@ bool WebServerHandler::getStoredFirebaseCredentials(String& email, String& passw
 }
 
 WebServerHandler::WebServerHandler(WiFiConfigurator& wifiConfig, FirebaseHandler& fbHandler) 
-    : server(80), wifiConfigurator(wifiConfig), firebaseHandler(fbHandler), wifiConnected(false) {
+    : server(80), wifiConfigurator(wifiConfig), firebaseHandler(fbHandler) {
 }
 
 void WebServerHandler::saveFirebaseCredentials(const String& email, const String& password) {
@@ -77,28 +80,169 @@ bool WebServerHandler::loadFirebaseCredentials(String& email, String& password) 
     return credentialsValid;
 }
 
-void WebServerHandler::begin(bool wifiConnected) {
-    this->wifiConnected = wifiConnected;
+void WebServerHandler::begin(bool isAPMode) {
+    // Configura todas as rotas
+    configureRoutes();
     
-    server.on("/", HTTP_GET, [this]() {
-        if(this->wifiConnected) {
-            this->handleFirebaseConfig();
-        } else {
-            this->handleWiFiConfig();
-        }
-    });
-    
-    server.on("/wifi-config", HTTP_POST, [this]() { this->handleWiFiConfig(); });
-    server.on("/firebase-config", HTTP_POST, [this]() { this->handleFirebaseConfig(); });
-    server.on("/reset-auth", HTTP_GET, [this]() { this->handleResetAuth(); });
-    server.onNotFound([this]() { this->handleNotFound(); });
+    if(isAPMode) {
+        // Configura DNS Captivo para redirecionar tudo para o portal
+        dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
+        Serial.println("DNS Captivo iniciado");
+    }
     
     server.begin();
+    Serial.println("HTTP server started");
 }
-
 void WebServerHandler::handleClient() {
+    if(WiFi.getMode() == WIFI_AP) {
+        dnsServer.processNextRequest();
+    }
     server.handleClient();
 }
+// Atualize a função configureRoutes() para usar a nova função
+void WebServerHandler::configureRoutes() {
+    // Rota raiz - redireciona para a configuração apropriada
+    server.on("/", HTTP_GET, [this]() {
+        if(WiFi.status() == WL_CONNECTED) {
+            server.sendHeader("Location", "/firebase-config");
+            server.send(302, "text/plain", "Redirecting to Firebase config");
+        } else {
+            server.sendHeader("Location", "/wifi-config");
+            server.send(302, "text/plain", "Redirecting to WiFi config");
+        }
+    });
+
+    // Configuração WiFi
+    server.on("/wifi-config", HTTP_GET, [this]() { 
+        handleWiFiConfig(); 
+    });
+    
+    server.on("/wifi-config", HTTP_POST, [this]() { 
+        handleWiFiConfigPost();
+    });
+
+    // Configuração Firebase
+    server.on("/firebase-config", HTTP_GET, [this]() { 
+        handleFirebaseConfig(); 
+    });
+    
+    server.on("/firebase-config", HTTP_POST, [this]() { 
+        handleFirebaseConfigPost();
+    });
+
+    // Rota para reiniciar
+    server.on("/restart", HTTP_GET, [this]() {
+        server.send(200, "text/html", "<!DOCTYPE html><html><body><h1>Reiniciando...</h1></body></html>");
+        delay(1000);
+        ESP.restart();
+    });
+
+    // Rota para status
+    server.on("/status", HTTP_GET, [this]() {
+        String status = "WiFi: " + String(WiFi.status() == WL_CONNECTED ? "Connected" : "Disconnected");
+        if(WiFi.status() == WL_CONNECTED) {
+            status += "\nIP: " + WiFi.localIP().toString();
+        }
+        status += "\nFirebase: " + String(firebaseHandler.isAuthenticated() ? "Authenticated" : "Not authenticated");
+        server.send(200, "text/plain", status);
+    });
+
+    // Manipulador para requisições não encontradas
+    server.onNotFound([this]() {
+        String message = "Rota não encontrada\n\nRotas disponíveis:\n";
+        message += "GET / - Redireciona para a configuração apropriada\n";
+        message += "GET /wifi-config - Configuração WiFi\n";
+        message += "POST /wifi-config - Envia dados WiFi\n";
+        message += "GET /firebase-config - Configuração Firebase\n";
+        message += "POST /firebase-config - Envia dados Firebase\n";
+        message += "GET /restart - Reinicia o dispositivo\n";
+        message += "GET /status - Mostra status do sistema";
+        
+        server.send(404, "text/plain", message);
+    });
+}
+String WebServerHandler::successPage(const String& title, const String& message) {
+    String html = "<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'>";
+    html += "<title>" + title + "</title>";
+    html += "<style>body{font-family:Arial,sans-serif;text-align:center;padding:20px;}";
+    html += ".card{background:white;border-radius:10px;padding:20px;max-width:400px;margin:0 auto;box-shadow:0 2px 10px rgba(0,0,0,0.1);}";
+    html += "h1{color:#4CAF50;}@keyframes spin{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}";
+    html += ".spinner{margin:20px auto;width:40px;height:40px;border:4px solid #f3f3f3;border-top:4px solid #3498db;border-radius:50%;animation:spin 1s linear infinite;}</style>";
+    html += "</head><body><div class='card'><h1>✓ " + title + "</h1><p>" + message + "</p><div class='spinner'></div></div></body></html>";
+    return html;
+}
+void WebServerHandler::handleWiFiConfigPost() {
+    String ssid = server.arg("ssid");
+    String password = server.arg("password");
+    
+    if(ssid.length() == 0) {
+        server.send(400, "text/html", errorPage("SSID não pode estar vazio"));
+        return;
+    }
+    
+    Serial.println("Tentando conectar a: " + ssid);
+    if(wifiConfigurator.connectToWiFi(ssid.c_str(), password.c_str(), true)) {
+        server.send(200, "text/html", successPage("WiFi conectado!", "Conectado com sucesso a " + ssid));
+        delay(1000);
+        ESP.restart();
+    } else {
+        server.send(200, "text/html", errorPage("Falha ao conectar a " + ssid));
+    }
+}
+
+void WebServerHandler::handleFirebaseConfigPost() {
+    // Verifica se há dados POST
+    if(server.method() != HTTP_POST) {
+        server.send(405, "text/plain", "Método não permitido");
+        return;
+    }
+
+    String email = server.arg("email");
+    String password = server.arg("password");
+
+    // Validação robusta
+    if(email.isEmpty() || password.isEmpty() || 
+       !email.indexOf("@") || email.length() > 100 || password.length() > 100) {
+        server.send(400, "text/html", errorPage("Credenciais inválidas. O email deve conter '@' e ambos os campos devem ter até 100 caracteres."));
+        return;
+    }
+
+    // Mostra página de processamento
+    server.send(200, "text/html", 
+        "<!DOCTYPE html>"
+        "<html>"
+        "<head>"
+        "<meta charset='UTF-8'>"
+        "<title>Processando...</title>"
+        "<style>"
+        "body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }"
+        ".processing { background: #e6f7ff; padding: 20px; border-radius: 5px; }"
+        "</style>"
+        "</head>"
+        "<body>"
+        "<div class='processing'>"
+        "<h2>Processando autenticação...</h2>"
+        "<p>Por favor, aguarde.</p>"
+        "</div>"
+        "</body>"
+        "</html>"
+    );
+
+    // Processa em segundo plano
+    if(firebaseHandler.authenticate(email, password)) {
+        saveFirebaseCredentials(email, password);
+        
+        // Redireciona após sucesso
+        server.sendHeader("Location", "/status");
+        server.send(302, "text/plain", "Autenticação bem-sucedida");
+    } else {
+        // Mostra erro após atraso
+        delay(1000); // Tempo para o cliente receber a primeira resposta
+        server.send(200, "text/html", errorPage("Falha na autenticação. Verifique suas credenciais e tente novamente."));
+    }
+}
+
+
 
 void WebServerHandler::handleRoot() {
     if(wifiConnected) {

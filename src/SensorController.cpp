@@ -16,45 +16,31 @@ int bcont7 = 0;
 DHT dht(DHTPIN, DHTTYPE);
 
 void SensorController::begin() {
-    Serial.println("Inicializando sensor DHT22");
-    dht.begin();  // Inicializa o sensor DHT22
-    pinMode(LDR_PIN, INPUT); // Configura o pino do LDR como entrada
-    pinMode(MQ7_PIN, INPUT); // Configura o pino do MQ-7 como entrada
+    // Inicialização do DHT22
+    dht.begin();
+    delay(100); // Tempo para estabilização
     
-    // Verifica se o DHT22 está respondendo
-    if (isnan(dht.readTemperature())) {
-        while(bcont1 <2) {
-            Serial.println("Falha ao inicializar o DHT22!");
-            bcont1++;
-        }
-
+    // Verificação do DHT22
+    float temp = dht.readTemperature();
+    float umid = dht.readHumidity();
+    
+    if(isnan(temp) || isnan(umid)) {
+        Serial.println("Falha ao ler DHT22 - verificando conexões");
         dhtOK = false;
     } else {
-        while(bcont2 <2) {
-            Serial.println("DHT22 inicializado com sucesso!");
-            bcont2++;
-        }
         dhtOK = true;
+        Serial.println("DHT22 inicializado com sucesso");
     }
 
-    // Inicialização do sensor CCS811 (CO2 e TVOC)
-    Serial.println("Inicializando sensor CCS811");
-    if (!ccs.begin()) {
-        while(bcont3 <2) {
-            Serial.println("Falha ao inicializar o CCS811!");
-            bcont3++;
-        }
+    // Inicialização do CCS811
+    if(!ccs.begin()) {
+        Serial.println("Falha ao iniciar CCS811 - verificando endereço I2C");
         ccsOK = false;
     } else {
-        while(bcont4 <2) {
-            Serial.println("CCS811 inicializado com sucesso!");
-            bcont4++;
-        }
-
         ccsOK = true;
-        // Aguarda o sensor ficar pronto
-        while(!ccs.available());
+        Serial.println("CCS811 inicializado - aguardando 20s para aquecimento");
     }
+
 
     // Inicialização do sensor MQ-7 (CO)
     while (bcont5 < 2)
@@ -88,6 +74,7 @@ void SensorController::begin() {
     temperature = 0;
     humidity = 0;
     light = 0;
+    
 }
 
 void SensorController::update() {

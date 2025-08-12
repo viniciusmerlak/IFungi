@@ -3,20 +3,21 @@
 
 #include <WiFi.h>
 #include <Preferences.h>
-#include <nvs_flash.h>
+
 class WiFiConfigurator {
 public:
-    void startAP(const char* apSSID, const char* apPassword = nullptr);
-    bool connectToWiFi(const char* ssid, const char* password, bool persist);
-    void reconnectOrFallbackToAP(const char* apSSID, const char* apPassword, const char* storedSSID, const char* storedPassword);
-    void stopAP();
+    WiFiConfigurator();
+    
+    bool startAP(const char* apSSID, const char* apPassword = nullptr);
+    bool connectToWiFi(const char* ssid, const char* password = nullptr, bool persistent = true);
+    void reconnectOrFallbackToAP(const char* apSSID, const char* apPassword = nullptr);
+    
+    bool loadCredentials(String &ssid, String &password);
+    bool saveCredentials(const char* ssid, const char* password = nullptr);
+    void clearCredentials();
+    
     bool isConnected();
     String getLocalIP();
-
-    unsigned long WIFI_CONNECT_TIMEOUT = 15000; // 30 seconds
-    void saveCredentials(const char* ssid, const char* password);
-    bool loadCredentials(String &ssid, String &password);
-    void clearCredentials();
 
 private:
     Preferences preferences;

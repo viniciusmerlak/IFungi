@@ -13,6 +13,8 @@ public:
     int getCO2();
     int getCO();
     int getLight();
+    bool dhtOK;
+    bool ccsOK;
     
 private:
     // Defina os pinos conforme sua montagem
@@ -26,8 +28,7 @@ private:
     Adafruit_CCS811 ccs;
     
     // Variáveis de estado
-    bool dhtOK;
-    bool ccsOK;
+
     unsigned long lastUpdate;
     
     // Variáveis das leituras
