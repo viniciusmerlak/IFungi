@@ -284,6 +284,8 @@ bool FirebaseHandler::loadFirebaseCredentials(String& email, String& password) {
     Preferences preferences;
     if(!preferences.begin("firebase-creds", true)) {
         Serial.println("[ERRO] Falha ao abrir preferences");
+        nvs_flash_erase(); // erase the NVS partition and...
+        nvs_flash_init(); // initialize the NVS partition.
         return false;
     }
     
