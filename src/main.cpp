@@ -7,7 +7,7 @@
 #include "perdiavontadedeviver.h"
 const char* AP_SSID = "IFungi-Config";
 const char* AP_PASSWORD = "config1234";
-
+String ifungiID;
 WiFiConfigurator wifiConfig;
 FirebaseHandler firebase;
 WebServerHandler webServer(wifiConfig, firebase);
