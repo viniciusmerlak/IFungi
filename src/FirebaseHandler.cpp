@@ -357,7 +357,32 @@ bool FirebaseHandler::loadFirebaseCredentials(String& email, String& password) {
         Serial.println("Nenhuma credencial encontrada");
         return false;
     }
+
+
     begin(FIREBASE_API_KEY, email, password, DATABASE_URL);
+
+    auth.user.email = email.c_str();
+    auth.user.password = password.c_str();
+
+    Firebase.begin(&config, &auth);
+        int attempts = 0;
+    while (!Firebase.ready() && attempts < 10) {
+        delay(500);
+        Serial.print(".");
+        if (!Firebase.ready() && MB_String(auth.token.uid).length() == 0) {
+            Serial.println("\nErro de autenticação: UID não recebido.");
+            authenticated = false;
+            return;
+        }else if(Firebase.ready()){
+            Serial.println("Usuario autenticado!:");
+            userUID = String(auth.token.uid.c_str());
+            Serial.print(userUID);
+        }
+        attempts++;
+    }
+
+
+
     return true;
 }
 
