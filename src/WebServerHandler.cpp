@@ -224,6 +224,7 @@ void WebServerHandler::handleFirebaseConfig() {
             server.send(400, "text/html", errorPage("Email e senha são obrigatórios"));
             return;
         }
+        
 
         // Tenta autenticar primeiro (antes de salvar)
         if(firebaseHandler.authenticate(email, password)) {

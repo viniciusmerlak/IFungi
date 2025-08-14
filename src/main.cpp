@@ -14,6 +14,7 @@ WebServerHandler webServer(wifiConfig, firebase);
 SensorController sensors;
 ActuatorController actuators;
 String ifungiID;
+
 void setup() {
 
     Serial.begin(115200);
@@ -36,13 +37,12 @@ void setup() {
             ifungiID = "IFUNGI-" + getMacAddress();
             
             webServer.begin(true);
-            
-            // Tenta autenticar com credenciais salvas
             String email, fbPassword;
             if(firebase.loadFirebaseCredentials(email, fbPassword)) {
                 if(!firebase.authenticate(email, fbPassword)) {
                     Serial.println("Credenciais do Firebase inválidas");
                 }else {
+                    Serial.println('LEEEEEEEEEEEEEEPOOOOOOOOOOOOOOOOOO');
                     firebase.verificarEstufa();
                 }
             }

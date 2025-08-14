@@ -44,6 +44,10 @@ void FirebaseHandler::resetAuthAttempts() {
 bool FirebaseHandler::authenticate(const String& email, const String& password) {
     // Limpa estado anterior
     authenticated = false;
+    if(email && password == ""){
+        Serial.println("Credenciais invalidas retornando autenticated false");
+        return false;
+    }
 
     // Verifica tentativas máximas
     if(authAttempts >= MAX_AUTH_ATTEMPTS) {
@@ -346,6 +350,9 @@ bool FirebaseHandler::loadFirebaseCredentials(String& email, String& password) {
     Preferences preferences;
     if(!preferences.begin("firebase-creds", true)) {
         Serial.println("Erro ao acessar preferências");
+        Serial.println("******************************************************");
+        Serial.println(email);
+        Serial.println(password);
         return false;
     }
     
@@ -355,34 +362,14 @@ bool FirebaseHandler::loadFirebaseCredentials(String& email, String& password) {
     
     if(email.isEmpty() || password.isEmpty()) {
         Serial.println("Nenhuma credencial encontrada");
+        Serial.println("******************************************************");
+        Serial.println(email);
+        Serial.println(password);
         return false;
     }
 
 
     begin(FIREBASE_API_KEY, email, password, DATABASE_URL);
-
-    auth.user.email = email.c_str();
-    auth.user.password = password.c_str();
-
-    Firebase.begin(&config, &auth);
-        int attempts = 0;
-    while (!Firebase.ready() && attempts < 10) {
-        delay(500);
-        Serial.print(".");
-        if (!Firebase.ready() && MB_String(auth.token.uid).length() == 0) {
-            Serial.println("\nErro de autenticação: UID não recebido.");
-            authenticated = false;
-            return;
-        }else if(Firebase.ready()){
-            Serial.println("Usuario autenticado!:");
-            userUID = String(auth.token.uid.c_str());
-            Serial.print(userUID);
-        }
-        attempts++;
-    }
-
-
-
     return true;
 }
 
