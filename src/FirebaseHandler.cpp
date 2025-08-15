@@ -41,36 +41,42 @@ void FirebaseHandler::resetAuthAttempts() {
     Serial.println("Contador de tentativas resetado");
 }
 bool FirebaseHandler::authenticate(const String& email, const String& password) {
+    // 1. Verificação básica das credenciais
     if(email.isEmpty() || password.isEmpty()) {
         Serial.println("[ERRO] Email ou senha vazios");
         return false;
     }
 
-    // Configuração do auth
+    // 2. Configuração das credenciais
     auth.user.email = email.c_str();
     auth.user.password = password.c_str();
 
-    Serial.println("Reiniciando conexão Firebase...");
-    Firebase.reset(&config);
-    Firebase.begin(&config, &auth);
+    // 3. Debug das credenciais (seguro)
+    Serial.printf("[AUTH] Tentando autenticar com:\nEmail: %s\nSenha: %.1s*****\n", 
+                 email.c_str(), password.c_str());
 
-    Serial.print("Aguardando autenticação");
-    unsigned long startTime = millis();
+    // 4. Reset da conexão Firebase (CRUCIAL)
+    Firebase.reset(&config);
     
-    while(millis() - startTime < 20000) {
+    // 5. Inicialização com autenticação
+    Firebase.begin(&config, &auth);
+    
+    Serial.print("[AUTH] Aguardando autenticação");
+    unsigned long startTime = millis();
+    bool authSuccess = false;
+    
+    // 6. Loop de espera com timeout
+    while(millis() - startTime < 20000) { // Timeout de 20s
         if(Firebase.ready()) {
-            authenticated = true;
-            userUID = auth.token.uid.c_str();
-            estufaId = "IFUNGI-" + getMacAddress();
-            
-            Serial.println("\nAutenticação bem-sucedida!");
-            Serial.printf("UID: %s\n", userUID.c_str());
-            return true;
+            authSuccess = true;
+            break;
         }
         
         // Verifica erros específicos
         if(Firebase.getLastError() != 0) {
-            Serial.printf("\nErro Firebase: %s\n", Firebase.errorToString(Firebase.getLastError()));
+            Serial.printf("\n[ERRO] Código: %d, Mensagem: %s\n", 
+                        Firebase.getLastError(),
+                        Firebase.errorToString(Firebase.getLastError()));
             break;
         }
         
@@ -78,9 +84,30 @@ bool FirebaseHandler::authenticate(const String& email, const String& password) 
         Serial.print(".");
     }
 
-    Serial.println("\n[ERRO] Falha na autenticação");
-    Serial.println("Motivo: " + String(Firebase.errorToString(Firebase.getLastError())));
-    return false;
+    // 7. Tratamento do resultado
+    if(authSuccess) {
+        authenticated = true;
+        userUID = auth.token.uid.c_str();
+        estufaId = "IFUNGI-" + getMacAddress();
+        
+        Serial.println("\n[AUTH] Autenticação bem-sucedida!");
+        Serial.printf("UID: %s\n", userUID.c_str());
+        Serial.printf("Token: %.10s...\n", auth.token.uid.c_str());
+        return true;
+    } else {
+        Serial.println("\n[ERRO] Falha na autenticação");
+        
+        // Diagnóstico detalhado
+        if(WiFi.status() != WL_CONNECTED) {
+            Serial.println("- WiFi desconectado");
+        } else if(Firebase.getLastError() != 0) {
+            Serial.printf("- Erro Firebase: %s\n", Firebase.errorToString(Firebase.getLastError()));
+        } else {
+            Serial.println("- Timeout sem resposta do servidor");
+        }
+        
+        return false;
+    }
 }
 
 void FirebaseHandler::atualizarEstadoAtuadores(bool rele1, bool rele2, bool rele3, bool rele4, 
