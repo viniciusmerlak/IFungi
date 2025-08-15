@@ -5,9 +5,10 @@
 #include "SensorController.h"
 #include "ActuatorController.h"
 #include "perdiavontadedeviver.h"
+#include <Preferences.h>
 const char* AP_SSID = "IFungi-Config";
 const char* AP_PASSWORD = "config1234";
-
+Preferences preferences;
 WiFiConfigurator wifiConfig;
 FirebaseHandler firebase;
 WebServerHandler webServer(wifiConfig, firebase);
@@ -16,45 +17,43 @@ ActuatorController actuators;
 String ifungiID;
 
 void setup() {
-
     Serial.begin(115200);
-    delay(1000);
-    
-    // Inicializa sensores e atuadores
-    sensors.begin();
-    actuators.begin(4, 14, 23, 18, 19); // Pinos fixos
-    
-    // Configura setpoints padrão (importante para quando não há Firebase)
-    actuators.aplicarSetpoints(5000, 20.0, 30.0, 60.0, 80.0);
+    delay(2000); // Tempo para Serial Monitor
 
-    // Tenta conectar com WiFi salvo
-    String ssid, password;
-    if(wifiConfig.loadCredentials(ssid, password)) {
-        if(wifiConfig.connectToWiFi(ssid.c_str(), password.c_str(), true)) {
-            Serial.println("Conectado ao WiFi! Iniciando servidor...");
-            
-            // Obtém o ID da estufa após inicialização
-            ifungiID = "IFUNGI-" + getMacAddress();
-            
-            webServer.begin(true);
-            String email, fbPassword;
-            if(firebase.loadFirebaseCredentials(email, fbPassword)) {
-                if(!firebase.authenticate(email, fbPassword)) {
-                    Serial.println("Credenciais do Firebase inválidas");
-                }else {
-                    Serial.println('LEEEEEEEEEEEEEEPOOOOOOOOOOOOOOOOOO');
-                    firebase.verificarEstufa();
-                }
-            }
-        } else {
+    // Inicializa NVS (seguro mesmo após Erase Flash)
+    if (!preferences.begin("global-namespace", false)) {
+        Serial.println("[AVISO] Falha ao inicializar NVS - operando em modo padrão");
+    } else {
+        Serial.println("NVS inicializado com sucesso");
+        preferences.end();
+    }
+
+    // Tenta carregar WiFi (se não existir, inicia AP)
+    String ssid, wifiPassword;
+    if (!wifiConfig.loadCredentials(ssid, wifiPassword)) {
+        Serial.println("Nenhuma credencial WiFi encontrada - iniciando AP...");
+        wifiConfig.startAP(AP_SSID, AP_PASSWORD);
+        webServer.begin(false); // Modo AP
+    } else {
+        // Tenta conectar ao WiFi salvo
+        if (!wifiConfig.connectToWiFi(ssid.c_str(), wifiPassword.c_str(), true)) {
+            Serial.println("Falha na conexão WiFi - iniciando AP...");
             wifiConfig.startAP(AP_SSID, AP_PASSWORD);
             webServer.begin(false);
+        } else {
+            webServer.begin(true); // Modo normal
+        }
+    }
+
+    // Tenta autenticar no Firebase (se não existir, aguarda configuração via AP)
+    String fbEmail, fbPassword;
+    if (firebase.loadFirebaseCredentials(fbEmail, fbPassword)) {
+        if (!firebase.authenticate(fbEmail, fbPassword)) {
+            Serial.println("Credenciais do Firebase inválidas - aguardando configuração via AP");
         }
     } else {
-        wifiConfig.startAP(AP_SSID, AP_PASSWORD);
-        webServer.begin(false);
+        Serial.println("Nenhuma credencial Firebase encontrada - aguardando configuração via AP");
     }
-    actuators.setFirebaseHandler(&firebase);
 }
 void loop() {
     static unsigned long lastFirebaseUpdate = 0;

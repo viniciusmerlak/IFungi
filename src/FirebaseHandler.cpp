@@ -40,57 +40,47 @@ void FirebaseHandler::resetAuthAttempts() {
     lastAuthAttempt = 0;
     Serial.println("Contador de tentativas resetado");
 }
-
 bool FirebaseHandler::authenticate(const String& email, const String& password) {
-    // Limpa estado anterior
-    authenticated = false;
-    if(email && password == ""){
-        Serial.println("Credenciais invalidas retornando autenticated false");
+    if(email.isEmpty() || password.isEmpty()) {
+        Serial.println("[ERRO] Email ou senha vazios");
         return false;
     }
 
-    // Verifica tentativas máximas
-    if(authAttempts >= MAX_AUTH_ATTEMPTS) {
-        unsigned long waitTime = millis() - lastAuthAttempt;
-        if(waitTime < AUTH_RETRY_DELAY) {
-            Serial.printf("Aguarde %lu segundos antes de tentar novamente\n", 
-                        (AUTH_RETRY_DELAY - waitTime)/1000);
-            return false;
-        }
-        authAttempts = 0;
-    }
-
-    authAttempts++;
-    lastAuthAttempt = millis();
-
-    Serial.println("Tentando autenticar no Firebase...");
-    
-    // Configura credenciais
+    // Configuração do auth
     auth.user.email = email.c_str();
     auth.user.password = password.c_str();
-    
-    // Inicializa Firebase com autenticação
+
+    Serial.println("Reiniciando conexão Firebase...");
+    Firebase.reset(&config);
     Firebase.begin(&config, &auth);
-    
-    // Aguarda autenticação
+
+    Serial.print("Aguardando autenticação");
     unsigned long startTime = millis();
-    while(!Firebase.ready() && (millis() - startTime < 10000)) {
-        delay(100);
+    
+    while(millis() - startTime < 20000) {
+        if(Firebase.ready()) {
+            authenticated = true;
+            userUID = auth.token.uid.c_str();
+            estufaId = "IFUNGI-" + getMacAddress();
+            
+            Serial.println("\nAutenticação bem-sucedida!");
+            Serial.printf("UID: %s\n", userUID.c_str());
+            return true;
+        }
+        
+        // Verifica erros específicos
+        if(Firebase.getLastError() != 0) {
+            Serial.printf("\nErro Firebase: %s\n", Firebase.errorToString(Firebase.getLastError()));
+            break;
+        }
+        
+        delay(500);
+        Serial.print(".");
     }
 
-    // Verifica resultado
-    authenticated = Firebase.ready();
-    if(authenticated) {
-        userUID = String(auth.token.uid.c_str());
-        estufaId = "IFUNGI-" + getMacAddress();
-        Serial.println("Autenticação bem-sucedida!");
-        Serial.print("UID: "); Serial.println(userUID);
-        authAttempts = 0;
-        return true;
-    } else {
-        Serial.println("Falha na autenticação: ");
-        return false;
-    }
+    Serial.println("\n[ERRO] Falha na autenticação");
+    Serial.println("Motivo: " + String(Firebase.errorToString(Firebase.getLastError())));
+    return false;
 }
 
 void FirebaseHandler::atualizarEstadoAtuadores(bool rele1, bool rele2, bool rele3, bool rele4, 
@@ -346,31 +336,32 @@ void FirebaseHandler::seraQeuCrio() {
 bool FirebaseHandler::isAuthenticated() const {
     return authenticated; // Remover a declaração local que sobrescrevia
 }
+
 bool FirebaseHandler::loadFirebaseCredentials(String& email, String& password) {
-    Preferences preferences;
-    if(!preferences.begin("firebase-creds", true)) {
-        Serial.println("Erro ao acessar preferências");
-        Serial.println("******************************************************");
-        Serial.println(email);
-        Serial.println(password);
-        return false;
-    }
-    
-    email = preferences.getString("email", "");
-    password = preferences.getString("password", "");
-    preferences.end();
-    
-    if(email.isEmpty() || password.isEmpty()) {
-        Serial.println("Nenhuma credencial encontrada");
-        Serial.println("******************************************************");
-        Serial.println(email);
-        Serial.println(password);
+    // Tenta abrir o namespace em modo leitura
+    if (!preferences.begin("firebase-creds", true)) {
+        Serial.println("[AVISO] Namespace 'firebase-creds' não encontrado - será criado quando necessário");
         return false;
     }
 
-
-    begin(FIREBASE_API_KEY, email, password, DATABASE_URL);
-    return true;
+    // Verifica se as chaves existem antes de ler
+    bool credenciaisExistem = preferences.isKey("email") && preferences.isKey("password");
+    
+    if (credenciaisExistem) {
+        email = preferences.getString("email", "");
+        password = preferences.getString("password", "");
+        preferences.end();
+        
+        if (email.isEmpty() || password.isEmpty()) {
+            Serial.println("[AVISO] Credenciais vazias na NVS");
+            return false;
+        }
+        return true;
+    } else {
+        Serial.println("[AVISO] Credenciais do Firebase não encontradas na NVS");
+        preferences.end();
+        return false;
+    }
 }
 
 void FirebaseHandler::RecebeSetpoint(ActuatorController& actuators) {

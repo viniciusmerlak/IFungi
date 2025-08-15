@@ -215,81 +215,95 @@ void WebServerHandler::handleFirebaseConfig() {
     }
 
     if(server.method() == HTTP_POST) {
-        // Obtém credenciais do formulário
+        // Obtém e sanitiza credenciais
         String email = server.arg("email");
         String password = server.arg("password");
+        email.trim();
+        password.trim();
 
-        // Validação básica dos campos
-        if(email.isEmpty() || password.isEmpty()) {
-            server.send(400, "text/html", errorPage("Email e senha são obrigatórios"));
+        // Debug dos dados recebidos
+        Serial.println("[DEBUG] Credenciais recebidas:");
+        Serial.println("Email: " + email);
+        Serial.println("Senha: " + password.substring(0,1) + "*****"); // Mostra apenas primeiro caractere por segurança
+
+        // Validação rigorosa
+        if(email.isEmpty() || password.isEmpty() || 
+           !email.indexOf('@') || password.length() < 6) {
+            server.send(400, "text/html", errorPage("Credenciais inválidas. Email deve conter @ e senha mínimo 6 caracteres"));
             return;
         }
-        
 
-        // Tenta autenticar primeiro (antes de salvar)
+        // --- Bloco de persistência segura ---
+        Preferences preferences;
+        if(!preferences.begin("firebase-creds", false)) {
+            Serial.println("[ERRO] Falha ao abrir NVS");
+            server.send(500, "text/html", errorPage("Erro interno de armazenamento"));
+            return;
+        }
+
+        // Tenta autenticar primeiro (evita salvar credenciais inválidas)
         if(firebaseHandler.authenticate(email, password)) {
-            // Se autenticou, salva as credenciais
-            saveFirebaseCredentials(email, password);
+            // Persiste as credenciais
+            preferences.putString("email", email);
+            preferences.putString("password", password);
+            preferences.end();
+
+            Serial.println("[SUCESSO] Credenciais salvas na NVS");
             
-            // Inicializa o Firebase com as novas credenciais
+            // Configurações pós-autenticação
             firebaseHandler.begin(FIREBASE_API_KEY, email, password, DATABASE_URL);
-            
-            // Verifica/cria a estufa
             firebaseHandler.verificarEstufa();
 
-            // Página de sucesso com redirecionamento
+            // Página de sucesso com auto-redirecionamento
             server.send(200, "text/html", 
                 "<!DOCTYPE html>"
-                "<html lang='pt-BR'>"
+                "<html>"
                 "<head>"
                 "<meta charset='UTF-8'>"
                 "<meta http-equiv='refresh' content='3;url=/' />"
                 "<title>Sucesso</title>"
                 "<style>"
-                "body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background-color: #f5f5f5; }"
-                ".success-box { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 500px; margin: 0 auto; }"
-                "h1 { color: #4CAF50; }"
-                ".spinner { margin: 20px auto; width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite; }"
-                "@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }"
+                "body{font-family:Arial,sans-serif;text-align:center;padding:50px;background:#f5f5f5;}"
+                ".card{background:white;max-width:500px;margin:0 auto;padding:30px;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,0.1);}"
+                "h1{color:#4CAF50;}"
+                ".loader{margin:20px auto;border:5px solid #f3f3f3;border-top:5px solid #3498db;border-radius:50%;width:50px;height:50px;animation:spin 1s linear infinite;}"
+                "@keyframes spin{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}"
                 "</style>"
                 "</head>"
                 "<body>"
-                "<div class='success-box'>"
-                "<h1>✅ Autenticação Bem-sucedida</h1>"
-                "<p>Credenciais salvas com sucesso!</p>"
-                "<p>Redirecionando para a página principal...</p>"
-                "<div class='spinner'></div>"
+                "<div class='card'>"
+                "<h1>✅ Autenticado com Sucesso</h1>"
+                "<p>Sistema configurado e credenciais armazenadas</p>"
+                "<div class='loader'></div>"
+                "<p>Redirecionando...</p>"
                 "</div>"
                 "</body>"
                 "</html>"
             );
         } else {
-            // Se falhar, limpa as credenciais inválidas
-            Preferences preferences;
-            preferences.begin("firebase-creds", false);
+            // Limpa NVS em caso de falha
             preferences.clear();
             preferences.end();
-
-            // Página de erro com opção para tentar novamente
+            
+            Serial.println("[ERRO] Autenticação Firebase falhou");
             server.send(401, "text/html", 
                 "<!DOCTYPE html>"
-                "<html lang='pt-BR'>"
+                "<html>"
                 "<head>"
                 "<meta charset='UTF-8'>"
-                "<title>Falha na Autenticação</title>"
+                "<title>Falha</title>"
                 "<style>"
-                "body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background-color: #f5f5f5; }"
-                ".error-box { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 500px; margin: 0 auto; }"
-                "h1 { color: #f44336; }"
-                ".btn { background: #ff5722; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 20px; }"
-                ".btn:hover { background: #e64a19; }"
+                "body{font-family:Arial,sans-serif;text-align:center;padding:50px;background:#f5f5f5;}"
+                ".card{background:white;max-width:500px;margin:0 auto;padding:30px;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,0.1);}"
+                "h1{color:#f44336;}"
+                ".btn{display:inline-block;margin-top:20px;padding:10px 20px;background:#FF5722;color:white;text-decoration:none;border-radius:5px;}"
+                ".btn:hover{background:#E64A19;}"
                 "</style>"
                 "</head>"
                 "<body>"
-                "<div class='error-box'>"
+                "<div class='card'>"
                 "<h1>❌ Falha na Autenticação</h1>"
-                "<p>As credenciais fornecidas são inválidas ou não podem ser verificadas.</p>"
-                "<p>Por favor, verifique seu email e senha e tente novamente.</p>"
+                "<p>Verifique suas credenciais do Firebase</p>"
                 "<a href='/firebase-config' class='btn'>Tentar Novamente</a>"
                 "</div>"
                 "</body>"

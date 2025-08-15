@@ -4,11 +4,13 @@
 #include "perdiavontadedeviver.h"
 #include <FirebaseESP32.h>
 #include "ActuatorController.h"
+#include <Preferences.h>
 
 class ActuatorController;
 
 class FirebaseHandler {
 public:
+    Preferences preferences;  // Declaração do objeto Preferences
     // Configuração e autenticação
     void begin(const String& apiKey, const String& email, const String& password, const String& databaseUrl);
     bool isAuthenticated() const;
