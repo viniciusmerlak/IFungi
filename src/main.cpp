@@ -5,27 +5,26 @@
 #include "SensorController.h"
 #include "ActuatorController.h"
 #include "perdiavontadedeviver.h"
-#include "qrCode.h"
+#include "genQrCode.h"  // Corrigido o nome do arquivo
+
 const char* AP_SSID = "IFungi-Config";
 const char* AP_PASSWORD = "config1234";
 String ifungiID;
 WiFiConfigurator wifiConfig;
 FirebaseHandler firebase;
 WebServerHandler webServer(wifiConfig, firebase);
+GenQR qrcode;
 SensorController sensors;
 ActuatorController actuators;
-void memateRapido();
 
-
-void memateRapido(){
+void memateRapido() {
     String email, password;
     Serial.println("iniciando loop até loadFirebaseCredentials retornar true");
-    while((email,password) != ("") && firebase.authenticated == true && !firebase.loadFirebaseCredentials(email,password)){
+    while((email, password) != ("") && firebase.authenticated == true && !firebase.loadFirebaseCredentials(email, password)) {
         Serial.print(".");
-        webServer.begin(true); //ta conectado ao wifi entao pro firebase ficar ligado tem que ta true
+        webServer.begin(true);
     }
 }
-
 
 void setup() {
     Serial.begin(115200);
@@ -45,13 +44,9 @@ void setup() {
             Serial.println("Conectado ao WiFi! Iniciando servidor...");
             
             // Obtém o ID da estufa
-// No setup(), substitua:
-// qrcode -> generateQRCode();
-// Por:
-            generateQRCode(ifungiID); // Gera QR code com o ID real da estufa
-
-            // Adicione esta linha após obter o ifungiID:
+            ifungiID = "IFUNGI:" + getMacAddress();
             Serial.println("ID da Estufa: " + ifungiID);
+            qrcode.generateQRCode(ifungiID); // Gera QR code com o ID real da estufa
             
             webServer.begin(true);
             
@@ -61,7 +56,6 @@ void setup() {
                 Serial.println("Credenciais do Firebase encontradas, autenticando...");
                 if(firebase.authenticate(email, firebasePassword)) {
                     Serial.println("Autenticação bem-sucedida!");
-                    
                 } else {
                     Serial.println("Falha na autenticação com credenciais salvas.");
                 }
@@ -78,6 +72,7 @@ void setup() {
     }
     actuators.setFirebaseHandler(&firebase);
 }
+
 void loop() {
     static unsigned long lastFirebaseUpdate = 0;
     static unsigned long lastTokenCheck = 0;
@@ -97,7 +92,7 @@ void loop() {
 
     if(firebase.isAuthenticated()) {
         if(millis() - lastTokenCheck > TOKEN_CHECK_INTERVAL) {
-            firebase.refreshToken(); // Método público agora
+            firebase.refreshToken();
             lastTokenCheck = millis();
         }
 
@@ -117,7 +112,7 @@ void loop() {
                 lastFirebaseUpdate = millis();
             } else {
                 Serial.println("Token do Firebase inválido, tentando renovar...");
-                firebase.refreshToken(); // Método público agora
+                firebase.refreshToken();
             }
         }
     } else {

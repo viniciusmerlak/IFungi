@@ -1,3 +1,9 @@
-#define PERDIAVONTADADEVIVER_H
+#ifndef PERDIAVONTADEDEVIVER_H
+#define PERDIAVONTADEDEVIVER_H
+
 #include <WiFi.h>
-extern String getMacAddress();
+#include <Arduino.h>
+
+String getMacAddress();
+
+#endif
