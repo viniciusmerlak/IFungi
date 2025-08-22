@@ -5,6 +5,7 @@
 #include "SensorController.h"
 #include "ActuatorController.h"
 #include "perdiavontadedeviver.h"
+#include "qrCode.h"
 const char* AP_SSID = "IFungi-Config";
 const char* AP_PASSWORD = "config1234";
 String ifungiID;
@@ -44,7 +45,13 @@ void setup() {
             Serial.println("Conectado ao WiFi! Iniciando servidor...");
             
             // Obtém o ID da estufa
-            ifungiID = "IFUNGI-" + getMacAddress();
+// No setup(), substitua:
+// qrcode -> generateQRCode();
+// Por:
+            generateQRCode(ifungiID); // Gera QR code com o ID real da estufa
+
+            // Adicione esta linha após obter o ifungiID:
+            Serial.println("ID da Estufa: " + ifungiID);
             
             webServer.begin(true);
             
@@ -54,6 +61,7 @@ void setup() {
                 Serial.println("Credenciais do Firebase encontradas, autenticando...");
                 if(firebase.authenticate(email, firebasePassword)) {
                     Serial.println("Autenticação bem-sucedida!");
+                    
                 } else {
                     Serial.println("Falha na autenticação com credenciais salvas.");
                 }
