@@ -19,7 +19,7 @@ void memateRapido();
 void memateRapido(){
     String email, password;
     Serial.println("iniciando loop até loadFirebaseCredentials retornar true");
-    while(!firebase.loadFirebaseCredentials(email,password)){
+    while((email,password) != ("") && firebase.authenticated == true && !firebase.loadFirebaseCredentials(email,password)){
         Serial.print(".");
         webServer.begin(true); //ta conectado ao wifi entao pro firebase ficar ligado tem que ta true
     }
@@ -27,15 +27,14 @@ void memateRapido(){
 
 
 void setup() {
-
     Serial.begin(115200);
     delay(1000);
     
     // Inicializa sensores e atuadores
     sensors.begin();
-    actuators.begin(4, 14, 23, 18, 19); // Pinos fixos
+    actuators.begin(4, 14, 23, 18, 19);
     
-    // Configura setpoints padrão (importante para quando não há Firebase)
+    // Configura setpoints padrão
     actuators.aplicarSetpoints(5000, 20.0, 30.0, 60.0, 80.0);
 
     // Tenta conectar com WiFi salvo
@@ -44,21 +43,22 @@ void setup() {
         if(wifiConfig.connectToWiFi(ssid.c_str(), password.c_str(), true)) {
             Serial.println("Conectado ao WiFi! Iniciando servidor...");
             
-            // Obtém o ID da estufa após inicialização
+            // Obtém o ID da estufa
             ifungiID = "IFUNGI-" + getMacAddress();
             
             webServer.begin(true);
             
             // Tenta autenticar com credenciais salvas
-            String email, password;
-            if(firebase.loadFirebaseCredentials(email, password)) {
-                Serial.println("loadFirebase retournou verdade");
-                firebase.authenticate(email, password);
-            }else{
-                Serial.println("loadFirebase retornou falso  iniciado a função do server do firebase sla");
-                memateRapido();
-                
-
+            String email, firebasePassword;
+            if(firebase.loadFirebaseCredentials(email, firebasePassword)) {
+                Serial.println("Credenciais do Firebase encontradas, autenticando...");
+                if(firebase.authenticate(email, firebasePassword)) {
+                    Serial.println("Autenticação bem-sucedida!");
+                } else {
+                    Serial.println("Falha na autenticação com credenciais salvas.");
+                }
+            } else {
+                Serial.println("Nenhuma credencial do Firebase encontrada.");
             }
         } else {
             wifiConfig.startAP(AP_SSID, AP_PASSWORD);
@@ -74,35 +74,27 @@ void loop() {
     static unsigned long lastFirebaseUpdate = 0;
     static unsigned long lastTokenCheck = 0;
     static unsigned long lastAuthAttempt = 0;
-    const unsigned long FIREBASE_INTERVAL = 5000;   // 5 segundos
-    const unsigned long TOKEN_CHECK_INTERVAL = 300000; // 5 minutos
-    const unsigned long AUTH_RETRY_INTERVAL = 30000;  // 30 segundos
+    const unsigned long FIREBASE_INTERVAL = 5000;
+    const unsigned long TOKEN_CHECK_INTERVAL = 300000;
+    const unsigned long AUTH_RETRY_INTERVAL = 30000;
 
-    // 1. Gerencia o servidor web
     webServer.handleClient();
-    
-    // 2. Atualiza leituras dos sensores
     sensors.update();
     
-    // 3. Controle local independente (sempre ativo)
     actuators.controlarAutomaticamente(
         sensors.getTemperature(),
         sensors.getHumidity(),
         sensors.getLight()
     );
 
-    // 4. Lógica do Firebase
     if(firebase.isAuthenticated()) {
-        // Verifica/renova token periodicamente
         if(millis() - lastTokenCheck > TOKEN_CHECK_INTERVAL) {
-            firebase.refreshTokenIfNeeded();
+            firebase.refreshToken(); // Método público agora
             lastTokenCheck = millis();
         }
 
-        // Operações com Firebase (a cada 5 segundos)
         if(millis() - lastFirebaseUpdate > FIREBASE_INTERVAL) {
-            if(Firebase.ready()) { // Verifica se o token está válido
-                // Envia dados dos sensores (não é booleano, então removemos a verificação)
+            if(Firebase.ready()) {
                 firebase.enviarDadosSensores(
                     sensors.getTemperature(),
                     sensors.getHumidity(),
@@ -111,26 +103,20 @@ void loop() {
                     sensors.getLight()
                 );
                 
-                // Verifica comandos remotos
                 firebase.verificarComandos(actuators);
-                
-                // Atualiza setpoints
                 firebase.RecebeSetpoint(actuators);
                 
                 lastFirebaseUpdate = millis();
             } else {
                 Serial.println("Token do Firebase inválido, tentando renovar...");
-                firebase.refreshTokenIfNeeded();
+                firebase.refreshToken(); // Método público agora
             }
         }
-    } 
-    else {
-        // Tenta autenticar periodicamente
+    } else {
         if(millis() - lastAuthAttempt > AUTH_RETRY_INTERVAL) {
             String email, password;
             if(firebase.loadFirebaseCredentials(email, password)) {
                 if(firebase.authenticate(email, password)) {
-                    // Se autenticou com sucesso, verifica/cria estufa
                     firebase.verificarEstufa();
                 }
             }
@@ -138,6 +124,5 @@ void loop() {
         }
     }
     
-    // Pequena pausa para estabilidade
     delay(100);
 }

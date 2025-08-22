@@ -130,7 +130,7 @@ void ActuatorController::controlarPeltier(bool resfriar, bool potencia) {
         delay(1000); // Simula tempo de aquecimento
     }
     if(firebaseHandler != nullptr) {
-        Serial.println("1111111111111111111111111111Atualizando estado dos atuadores no Firebase...");
+        Serial.println("[FIREBASE RELAYS] Atualizando estado dos atuadores no Firebase...");
         firebaseHandler->atualizarEstadoAtuadores(
             digitalRead(_pinRele1),
             digitalRead(_pinRele2),
@@ -146,19 +146,19 @@ void ActuatorController::controlarPeltier(bool resfriar, bool potencia) {
 bool ActuatorController::AquecerPastilha(bool ligar) {
     if (ligar) {
         if (!peltierHeating || (millis() - lastPeltierTime > peltierTimeout)) {
-            Serial.println("Iniciando aquecimento da pastilha");
+            Serial.println("[ATUADOR UPDATE] Iniciando aquecimento da pastilha");
             digitalWrite(_pinRele1, HIGH); // Liga o rele da pastilha
             digitalWrite(_pinRele2, HIGH); //Liga o rele do aquecimento
             lastPeltierTime = millis();
             peltierHeating = true;
             return true;
         }
-        Serial.println("Pastilha já em aquecimento - aguardando timeout");
+        Serial.println("[ATUADOR UPDATE] Pastilha já em aquecimento - aguardando timeout");
         delay(1000); // Aguarda antes de tentar novamente
         return false;
     } else {
         if (peltierHeating) {
-            Serial.println("Desligando aquecimento da pastilha");
+            Serial.println("[ATUADOR UPDATE] Desligando aquecimento da pastilha");
             digitalWrite(_pinRele1,LOW);
             digitalWrite(_pinRele2,LOW ); // Desliga o rele da pastilha e do aquecimento
             // Desligar
@@ -173,16 +173,16 @@ void ActuatorController::controlarAutomaticamente(float temp, float umid, int lu
     Serial.printf("Controlando: Temp=%.2f, Umid=%.2f, Luz=%d\n", temp, umid, luz);
     if (tempMin>temp) {
         // Aciona aquecimento
-        Serial.println("###############################Temperatura abaixo do mínimo, aquecendo##########################");
+        Serial.println("[ATUADOR UPDATE] Temperatura abaixo do mínimo, aquecendo");
         bool resfriar = false;
         controlarPeltier(resfriar, false);
     } else if (temp > tempMax) {
-        Serial.println("###############################Temperatura acima do máximo, resfriando##########################");
+        Serial.println("[ATUADOR UPDATE] Temperatura acima do máximo, resfriando");
         // Aciona resfriamento
         bool resfriar = true;
         controlarPeltier(resfriar, false);
     } else {
-        Serial.println("###############################Temperatura dentro do intervalo, desligando peltier##########################");
+        Serial.println("[ATUADOR UPDATE] Temperatura dentro do intervalo, desligando peltier");
         // Temperatura ok, desliga peltier
         controlarPeltier(false, false);
     }

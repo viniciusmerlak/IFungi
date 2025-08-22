@@ -10,6 +10,7 @@ class ActuatorController;
 
 class FirebaseHandler {
 public:
+    void refreshToken();
     // Configuração e autenticação
     void begin(const String& apiKey, const String& email, const String& password, const String& databaseUrl);
     bool isAuthenticated() const;
