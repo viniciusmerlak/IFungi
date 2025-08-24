@@ -1,6 +1,54 @@
 // ActuatorController.cpp
 #include "ActuatorController.h"
+#include <Preferences.h>
 
+void ActuatorController::salvarSetpointsNVS() {
+    Preferences preferences;
+    if(!preferences.begin("setpoints", false)) {
+        Serial.println("Erro ao abrir NVS para salvar setpoints!");
+        return;
+    }
+    
+    preferences.putInt("lux", luxSetpoint);
+    preferences.putFloat("tMin", tempMin);
+    preferences.putFloat("tMax", tempMax);
+    preferences.putFloat("uMin", umidMin);
+    preferences.putFloat("uMax", umidMax);
+    preferences.putInt("coSp", coSetpoint);
+    preferences.putInt("co2Sp", co2Setpoint);
+    preferences.putInt("tvocsSp", tvocsSetpoint);
+    
+    preferences.end();
+    Serial.println("Setpoints salvos no NVS");
+}
+
+bool ActuatorController::carregarSetpointsNVS() {
+    Preferences preferences;
+    if(!preferences.begin("setpoints", true)) {
+        Serial.println("NVS de setpoints não encontrado, usando padrões");
+        return false;
+    }
+    
+    // Carrega os valores, se não existir, retorna false
+    if(preferences.isKey("lux")) {
+        luxSetpoint = preferences.getInt("lux", 5000);
+        tempMin = preferences.getFloat("tMin", 20.0);
+        tempMax = preferences.getFloat("tMax", 30.0);
+        umidMin = preferences.getFloat("uMin", 60.0);
+        umidMax = preferences.getFloat("uMax", 80.0);
+        coSetpoint = preferences.getInt("coSp", 400);
+        co2Setpoint = preferences.getInt("co2Sp", 400);
+        tvocsSetpoint = preferences.getInt("tvocsSp", 100);
+        
+        preferences.end();
+        Serial.println("Setpoints carregados do NVS");
+        return true;
+    } else {
+        preferences.end();
+        Serial.println("Nenhum setpoint salvo no NVS, usando padrões");
+        return false;
+    }
+}
 // Definições de histerese para evitar oscilações
 const float HYSTERESIS_TEMP = 0.5f;
 const float HYSTERESIS_UMID = 2.0f;
@@ -53,7 +101,10 @@ void ActuatorController::aplicarSetpoints(int lux, float tMin, float tMax, float
     umidMax = uMax;
     coSetpoint = coSp;
     co2Setpoint = co2Sp;
-    tvocsSetpoint = tvocsSp; // Add this line
+    tvocsSetpoint = tvocsSp;
+    
+    // Salva os setpoints no NVS
+    salvarSetpointsNVS();
     
     Serial.printf("Setpoints aplicados: Lux=%d, Temp=[%.1f-%.1f], Umid=[%.1f-%.1f], CO=%d, CO2=%d, TVOCs=%d\n", 
                  lux, tMin, tMax, uMin, uMax, coSp, co2Sp, tvocsSp);

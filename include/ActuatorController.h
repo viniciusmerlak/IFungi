@@ -16,7 +16,8 @@ public:
     void controlarPeltier(bool resfriar, bool ligar);
     void controlarAutomaticamente(float temp, float umid, int luz, int co, int co2, int tvocs);
     bool AquecerPastilha(bool ligar);
-    
+    void salvarSetpointsNVS();
+    bool carregarSetpointsNVS();
     enum ModoPeltier {
         DESLIGADO,
         AQUECENDO,

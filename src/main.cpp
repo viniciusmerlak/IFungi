@@ -35,8 +35,11 @@ void setup() {
     sensors.begin();
     actuators.begin(4, 23, 14, 18, 19);
     
-    // Configura setpoints padrão
-    actuators.aplicarSetpoints(5000, 20.0, 30.0, 60.0, 80.0, 400, 400, 100); // Add default TVOCs setpoint
+    // Tenta carregar setpoints do NVS, se não existir, usa os padrões
+    if(!actuators.carregarSetpointsNVS()) {
+        // Configura setpoints padrão
+        actuators.aplicarSetpoints(5000, 20.0, 30.0, 60.0, 80.0, 400, 400, 100);
+    }
 
     // Tenta conectar com WiFi salvo
     String ssid, password;

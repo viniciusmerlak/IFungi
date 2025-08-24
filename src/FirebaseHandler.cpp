@@ -561,8 +561,8 @@ void FirebaseHandler::RecebeSetpoint(ActuatorController& actuators) {
 
             // Aplica os setpoints nos atuadores
             actuators.aplicarSetpoints(setpoints.lux, setpoints.tMin, setpoints.tMax, 
-                                 setpoints.uMin, setpoints.uMax, setpoints.coSp, 
-                                 setpoints.co2Sp, setpoints.tvocsSp);
+                                setpoints.uMin, setpoints.uMax, setpoints.coSp, 
+                                setpoints.co2Sp, setpoints.tvocsSp);
         } else {
             Serial.println("Alguns setpoints não foram encontrados no JSON");
         }
