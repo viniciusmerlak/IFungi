@@ -400,6 +400,29 @@ void FirebaseHandler::criarEstufaInicial(const String& usuarioCriador, const Str
         }
     }
 }
+void FirebaseHandler::enviarHeartbeat() {
+    if (!authenticated || !Firebase.ready()) {
+        return;
+    }
+
+    String path = getEstufasPath() + estufaId + "/status";
+    
+    FirebaseJson json;
+    json.set("online", true);
+    json.set("lastHeartbeat", millis());
+    json.set("ip", WiFi.localIP().toString());
+    
+    if (Firebase.updateNode(fbdo, path.c_str(), json)) {
+        lastHeartbeatTime = millis();
+        Serial.println("Heartbeat enviado com sucesso");
+    } else {
+        Serial.println("Falha ao enviar heartbeat: " + fbdo.errorReason());
+    }
+}
+
+unsigned long FirebaseHandler::getLastHeartbeatTime() const {
+    return lastHeartbeatTime;
+}
 
 bool FirebaseHandler::estufaExiste(const String& estufaId) {
     if (!authenticated) {

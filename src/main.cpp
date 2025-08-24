@@ -125,23 +125,25 @@ void loop() {
     static unsigned long lastAuthAttempt = 0;
     static unsigned long lastSensorRead = 0;
     static unsigned long lastActuatorControl = 0;
+    static unsigned long lastHeartbeat = 0; // Novo
     
     const unsigned long FIREBASE_INTERVAL = 5000;
     const unsigned long TOKEN_CHECK_INTERVAL = 300000;
     const unsigned long AUTH_RETRY_INTERVAL = 30000;
-    const unsigned long SENSOR_READ_INTERVAL = 2000;    // Ler sensores a cada 2 segundos
-    const unsigned long ACTUATOR_CONTROL_INTERVAL = 5000; // Controlar atuadores a cada 5 segundos
+    const unsigned long SENSOR_READ_INTERVAL = 2000;
+    const unsigned long ACTUATOR_CONTROL_INTERVAL = 5000;
+    const unsigned long HEARTBEAT_INTERVAL = 15000; // 30 segundos
 
-    // 1. Gerencia o servidor web (não-bloqueante)
+    // 1. Gerencia o servidor web
     webServer.handleClient();
     
-    // 2. Atualiza leituras dos sensores em intervalos regulares
+    // 2. Atualiza leituras dos sensores
     if (millis() - lastSensorRead > SENSOR_READ_INTERVAL) {
         sensors.update();
         lastSensorRead = millis();
     }
     
-    // 3. Controle automático assíncrono dos atuadores
+    // 3. Controle automático dos atuadores
     if (millis() - lastActuatorControl > ACTUATOR_CONTROL_INTERVAL) {
         actuators.controlarAutomaticamente(
             sensors.getTemperature(),
@@ -151,6 +153,13 @@ void loop() {
         lastActuatorControl = millis();
     }
 
+    // 4. Enviar heartbeat periodicamente
+    if (millis() - lastHeartbeat > HEARTBEAT_INTERVAL) {
+        if (firebase.isAuthenticated()) {
+            firebase.enviarHeartbeat();
+        }
+        lastHeartbeat = millis();
+    }
     // 4. Lógica do Firebase (mantida como antes)
     if(firebase.isAuthenticated()) {
         if(millis() - lastTokenCheck > TOKEN_CHECK_INTERVAL) {

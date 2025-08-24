@@ -38,7 +38,8 @@ public:
     
     static String getEstufasPath() { return "/estufas/"; }
     static String getUsuariosPath() { return "/Usuarios/"; }
-
+    void enviarHeartbeat();
+    unsigned long getLastHeartbeatTime() const;
 private:
     String getMacAddress();
     WiFiConfigurator* wifiConfig = nullptr;
@@ -53,6 +54,8 @@ private:
     static const unsigned long AUTH_RETRY_DELAY = 300000;
     static const int TOKEN_REFRESH_INTERVAL = 30 * 60 * 1000;
     unsigned long lastTokenRefresh = 0;
+    unsigned long lastHeartbeatTime = 0;
+    const unsigned long HEARTBEAT_INTERVAL = 30000; // 30 segundos
 };
 
 #endif
