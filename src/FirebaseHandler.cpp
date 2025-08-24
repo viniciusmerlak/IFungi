@@ -214,13 +214,41 @@ void FirebaseHandler::verificarEstufa() {
         criarEstufaInicial(userUID, userUID);
     }
 }
-void FirebaseHandler::enviarDadosSensores(float temp, float umid, int co2, int co, int lux) {
-    refreshTokenIfNeeded(); // Verifica o token antes de cada operação
+
+void FirebaseHandler::enviarDadosParaHistorico(float temp, float umid, int co2, int co, int lux) {
     if (!authenticated || !Firebase.ready()) {
-       Serial.println("Não autenticado ou token inválido");
         return;
     }
 
+    // Usar timestamp como chave para garantir ordem cronológica
+    String timestamp = String(millis());
+    String path = "/historico/" + estufaId + "/" + timestamp;
+    
+    FirebaseJson json;
+    json.set("timestamp", timestamp);
+    json.set("temperatura", temp);
+    json.set("umidade", umid);
+    json.set("co2", co2);
+    json.set("co", co);
+    json.set("luminosidade", lux);
+    json.set("dataHora", "2023-01-01T10:00:00Z"); // Você pode preencher com tempo real se tiver RTC
+    
+    if (Firebase.setJSON(fbdo, path.c_str(), json)) {
+        Serial.println("Dados salvos no histórico com sucesso!");
+    } else {
+        Serial.println("Falha ao salvar histórico: " + fbdo.errorReason());
+    }
+}
+
+// Modifique o método enviarDadosSensores existente:
+void FirebaseHandler::enviarDadosSensores(float temp, float umid, int co2, int co, int lux) {
+    refreshTokenIfNeeded();
+    if (!authenticated || !Firebase.ready()) {
+        Serial.println("Não autenticado ou token inválido");
+        return;
+    }
+
+    // Dados atuais (como antes)
     FirebaseJson json;
     json.set("sensores/temperatura", temp);
     json.set("sensores/umidade", umid);
@@ -231,7 +259,15 @@ void FirebaseHandler::enviarDadosSensores(float temp, float umid, int co2, int c
 
     String path = "/estufas/" + estufaId;
     Firebase.updateNode(fbdo, path.c_str(), json);
+    
+    // Salvar no histórico a cada intervalo definido
+    if (millis() - lastHistoricoTime > HISTORICO_INTERVAL) {
+        enviarDadosParaHistorico(temp, umid, co2, co, lux);
+        lastHistoricoTime = millis();
+    }
 }
+
+
 
 void FirebaseHandler::handleTokenError() {
     if (!Firebase.ready()) {
@@ -419,6 +455,8 @@ void FirebaseHandler::enviarHeartbeat() {
         Serial.println("Falha ao enviar heartbeat: " + fbdo.errorReason());
     }
 }
+
+
 
 unsigned long FirebaseHandler::getLastHeartbeatTime() const {
     return lastHeartbeatTime;

@@ -40,6 +40,7 @@ public:
     static String getUsuariosPath() { return "/Usuarios/"; }
     void enviarHeartbeat();
     unsigned long getLastHeartbeatTime() const;
+    void enviarDadosParaHistorico(float temp, float umid, int co2, int co, int lux);
 private:
     String getMacAddress();
     WiFiConfigurator* wifiConfig = nullptr;
@@ -56,6 +57,8 @@ private:
     unsigned long lastTokenRefresh = 0;
     unsigned long lastHeartbeatTime = 0;
     const unsigned long HEARTBEAT_INTERVAL = 30000; // 30 segundos
+    unsigned long lastHistoricoTime = 0;
+    const unsigned long HISTORICO_INTERVAL = 300000; // 5 minutos entre registros
 };
 
 #endif
