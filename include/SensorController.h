@@ -13,6 +13,7 @@ public:
     int getCO2();
     int getCO();
     int getLight();
+    int getTVOCs(); // Add this line
     
 private:
     // Defina os pinos conforme sua montagem
@@ -35,6 +36,7 @@ private:
     float humidity;
     int co2;
     int co;
+    int tvocs;
     int light;
 };
 

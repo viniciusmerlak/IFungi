@@ -8,14 +8,13 @@ class FirebaseHandler;
 
 class ActuatorController {
 public:
-    void begin(uint8_t pinLED, uint8_t pinRele1, uint8_t pinRele2, 
-               uint8_t pinRele3, uint8_t pinRele4);
+    void begin(uint8_t pinLED, uint8_t pinRele1, uint8_t pinRele2, uint8_t pinRele3, uint8_t pinRele4);
     void setFirebaseHandler(FirebaseHandler* handler);
-    void aplicarSetpoints(int lux, float tMin, float tMax, float uMin, float uMax);
+    void aplicarSetpoints(int lux, float tMin, float tMax, float uMin, float uMax, int coSp, int co2Sp, int tvocsSp);
     void controlarLEDs(bool ligado, int watts);
     void controlarRele(uint8_t num, bool estado);
     void controlarPeltier(bool resfriar, bool ligar);
-    void controlarAutomaticamente(float temp, float umid, int luz);
+    void controlarAutomaticamente(float temp, float umid, int luz, int co, int co2, int tvocs);
     bool AquecerPastilha(bool ligar);
     
     enum ModoPeltier {
@@ -40,6 +39,9 @@ private:
     float tempMax = 30.0;
     float umidMin = 60.0;
     float umidMax = 80.0;
+    int coSetpoint = 400;    // ppm
+    int co2Setpoint = 400;  // ppm
+    int tvocsSetpoint = 100; // ppb - Add this line
     
     // Novas variáveis para controle de estado
     ModoPeltier modoPeltierAtual = DESLIGADO;

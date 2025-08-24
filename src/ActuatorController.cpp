@@ -45,18 +45,21 @@ void ActuatorController::setFirebaseHandler(FirebaseHandler* handler) {
     Serial.println("FirebaseHandler definido para ActuatorController");
 }
 
-void ActuatorController::aplicarSetpoints(int lux, float tMin, float tMax, float uMin, float uMax) {
+void ActuatorController::aplicarSetpoints(int lux, float tMin, float tMax, float uMin, float uMax, int coSp, int co2Sp, int tvocsSp) {
     luxSetpoint = lux;
     tempMin = tMin;
     tempMax = tMax;
     umidMin = uMin;
     umidMax = uMax;
+    coSetpoint = coSp;
+    co2Setpoint = co2Sp;
+    tvocsSetpoint = tvocsSp; // Add this line
     
-    Serial.printf("Setpoints aplicados: Lux=%d, Temp=[%.1f-%.1f], Umid=[%.1f-%.1f]\n", 
-                 lux, tMin, tMax, uMin, uMax);
+    Serial.printf("Setpoints aplicados: Lux=%d, Temp=[%.1f-%.1f], Umid=[%.1f-%.1f], CO=%d, CO2=%d, TVOCs=%d\n", 
+                 lux, tMin, tMax, uMin, uMax, coSp, co2Sp, tvocsSp);
 }
 
-void ActuatorController::controlarAutomaticamente(float temp, float umid, int luz) {
+void ActuatorController::controlarAutomaticamente(float temp, float umid, int luz, int co, int co2, int tvocs) {
     // Verificar segurança da Peltier (apenas para aquecimento)
     if (peltierHeating && modoPeltierAtual == AQUECENDO && 
         (millis() - lastPeltierTime >= tempoOperacao)) {
@@ -119,6 +122,14 @@ void ActuatorController::controlarAutomaticamente(float temp, float umid, int lu
     if (firebaseHandler != nullptr && millis() - lastUpdateTime > 5000) {
         atualizarEstadoFirebase();
         lastUpdateTime = millis();
+    }
+    // 5. Controle dos gases co, co2 e tvocs
+    if (co > coSetpoint || co2 > co2Setpoint || tvocs > tvocsSetpoint) {
+        Serial.printf("[ATUADOR] Gases acima do limite (CO: %d, CO2: %d, TVOCs: %d), ligando exaustor\n", 
+                     co, co2, tvocs);
+        controlarRele(4, true); // Liga exaustor
+    } else {
+        controlarRele(4, false); // Desliga exaustor
     }
 }
 

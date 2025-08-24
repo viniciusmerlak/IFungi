@@ -24,7 +24,7 @@ public:
     void verificarPermissoes();
     void setWiFiConfigurator(WiFiConfigurator* wifiConfig);
     void handleTokenError();
-    void enviarDadosSensores(float temp, float umid, int co2, int co, int lux);
+    void enviarDadosSensores(float temp, float umid, int co2, int co, int lux, int tvocs);
     void verificarComandos(ActuatorController& actuators);
     void RecebeSetpoint(ActuatorController& actuators);
     void seraQeuCrio();
@@ -40,7 +40,7 @@ public:
     static String getUsuariosPath() { return "/Usuarios/"; }
     void enviarHeartbeat();
     unsigned long getLastHeartbeatTime() const;
-    void enviarDadosParaHistorico(float temp, float umid, int co2, int co, int lux);
+    void enviarDadosParaHistorico(float temp, float umid, int co2, int co, int lux, int tvocs);
 private:
     String getMacAddress();
     WiFiConfigurator* wifiConfig = nullptr;

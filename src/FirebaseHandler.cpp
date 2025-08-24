@@ -215,7 +215,7 @@ void FirebaseHandler::verificarEstufa() {
     }
 }
 
-void FirebaseHandler::enviarDadosParaHistorico(float temp, float umid, int co2, int co, int lux) {
+void FirebaseHandler::enviarDadosParaHistorico(float temp, float umid, int co2, int co, int lux, int tvocs) {
     if (!authenticated || !Firebase.ready()) {
         return;
     }
@@ -230,6 +230,7 @@ void FirebaseHandler::enviarDadosParaHistorico(float temp, float umid, int co2, 
     json.set("umidade", umid);
     json.set("co2", co2);
     json.set("co", co);
+    json.set("tvocs", tvocs); // Use the paramete
     json.set("luminosidade", lux);
     json.set("dataHora", "2023-01-01T10:00:00Z"); // Você pode preencher com tempo real se tiver RTC
     
@@ -241,7 +242,7 @@ void FirebaseHandler::enviarDadosParaHistorico(float temp, float umid, int co2, 
 }
 
 // Modifique o método enviarDadosSensores existente:
-void FirebaseHandler::enviarDadosSensores(float temp, float umid, int co2, int co, int lux) {
+void FirebaseHandler::enviarDadosSensores(float temp, float umid, int co2, int co, int lux, int tvocs) {
     refreshTokenIfNeeded();
     if (!authenticated || !Firebase.ready()) {
         Serial.println("Não autenticado ou token inválido");
@@ -254,6 +255,7 @@ void FirebaseHandler::enviarDadosSensores(float temp, float umid, int co2, int c
     json.set("sensores/umidade", umid);
     json.set("sensores/co2", co2);
     json.set("sensores/co", co);
+    json.set("sensores/tvocs", tvocs); // Use the parameter
     json.set("sensores/luminosidade", lux);
     json.set("lastUpdate", millis());
 
@@ -262,7 +264,7 @@ void FirebaseHandler::enviarDadosSensores(float temp, float umid, int co2, int c
     
     // Salvar no histórico a cada intervalo definido
     if (millis() - lastHistoricoTime > HISTORICO_INTERVAL) {
-        enviarDadosParaHistorico(temp, umid, co2, co, lux);
+        enviarDadosParaHistorico(temp, umid, co2, co, lux, tvocs);
         lastHistoricoTime = millis();
     }
 }
@@ -398,6 +400,7 @@ void FirebaseHandler::criarEstufaInicial(const String& usuarioCriador, const Str
     json.set("lastUpdate", (int)time(nullptr));
 
     FirebaseJson sensores;
+    sensores.set("tvocs", 0);
     sensores.set("co", 0);
     sensores.set("co2", 0);
     sensores.set("luminosidade", 0);
@@ -411,6 +414,9 @@ void FirebaseHandler::criarEstufaInicial(const String& usuarioCriador, const Str
     setpoints.set("tMin", 0);
     setpoints.set("uMax", 0);
     setpoints.set("uMin", 0);
+    setpoints.set("coSp", 0);
+    setpoints.set("co2Sp", 0);
+    setpoints.set("tvocsSp", 0);
     json.set("setpoints", setpoints);
 
     json.set("niveis/agua", false);
@@ -528,6 +534,9 @@ void FirebaseHandler::RecebeSetpoint(ActuatorController& actuators) {
             float tMin;
             float uMax;
             float uMin;
+            int coSp;
+            int co2Sp;
+            int tvocsSp;
         } setpoints;
 
         // Obtém todos os valores de uma vez
@@ -537,6 +546,9 @@ void FirebaseHandler::RecebeSetpoint(ActuatorController& actuators) {
         success &= json->get(result, "tMin"); setpoints.tMin = success ? result.floatValue : 0;
         success &= json->get(result, "uMax"); setpoints.uMax = success ? result.floatValue : 0;
         success &= json->get(result, "uMin"); setpoints.uMin = success ? result.floatValue : 0;
+        success &= json->get(result, "coSp"); setpoints.coSp = success ? result.intValue : 0;
+        success &= json->get(result, "co2Sp"); setpoints.co2Sp = success ? result.intValue : 0;
+        success &= json->get(result, "tvocsSp"); setpoints.tvocsSp = success ? result.intValue : 0;
 
         if (success) {
             Serial.println("Setpoints recebidos com sucesso:");
@@ -545,10 +557,12 @@ void FirebaseHandler::RecebeSetpoint(ActuatorController& actuators) {
             Serial.println("- Temp Mín: " + String(setpoints.tMin));
             Serial.println("- Umidade Máx: " + String(setpoints.uMax));
             Serial.println("- Umidade Mín: " + String(setpoints.uMin));
+            Serial.println("- TVOCs: " + String(setpoints.tvocsSp));
 
             // Aplica os setpoints nos atuadores
             actuators.aplicarSetpoints(setpoints.lux, setpoints.tMin, setpoints.tMax, 
-                                     setpoints.uMin, setpoints.uMax);
+                                 setpoints.uMin, setpoints.uMax, setpoints.coSp, 
+                                 setpoints.co2Sp, setpoints.tvocsSp);
         } else {
             Serial.println("Alguns setpoints não foram encontrados no JSON");
         }

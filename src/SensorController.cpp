@@ -103,6 +103,7 @@ void SensorController::update() {
         
         if(ccsOK && ccs.available()) {
             co2 = ccs.geteCO2();
+            tvocs = ccs.getTVOC();
         }
         
         lastUpdate = millis();
@@ -113,4 +114,5 @@ float SensorController::getTemperature() { return temperature; }
 float SensorController::getHumidity() { return humidity; }
 int SensorController::getCO2() { return co2; }
 int SensorController::getCO() { return co; }
+int SensorController::getTVOCs() { return tvocs; }
 int SensorController::getLight() { return light; }

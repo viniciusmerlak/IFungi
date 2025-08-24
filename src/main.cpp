@@ -36,7 +36,7 @@ void setup() {
     actuators.begin(4, 23, 14, 18, 19);
     
     // Configura setpoints padrão
-    actuators.aplicarSetpoints(5000, 20.0, 30.0, 60.0, 80.0);
+    actuators.aplicarSetpoints(5000, 20.0, 30.0, 60.0, 80.0, 400, 400, 100); // Add default TVOCs setpoint
 
     // Tenta conectar com WiFi salvo
     String ssid, password;
@@ -148,11 +148,13 @@ void loop() {
         actuators.controlarAutomaticamente(
             sensors.getTemperature(),
             sensors.getHumidity(),
-            sensors.getLight()
+            sensors.getLight(),
+            sensors.getCO(),
+            sensors.getCO2(),
+            sensors.getTVOCs()
         );
         lastActuatorControl = millis();
     }
-
     // 4. Enviar heartbeat periodicamente
     if (millis() - lastHeartbeat > HEARTBEAT_INTERVAL) {
         if (firebase.isAuthenticated()) {
@@ -174,7 +176,8 @@ void loop() {
                     sensors.getHumidity(),
                     sensors.getCO2(),
                     sensors.getCO(),
-                    sensors.getLight()
+                    sensors.getLight(),
+                    sensors.getTVOCs() // Add this
                 );
                 
                 firebase.verificarComandos(actuators);
