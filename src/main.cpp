@@ -29,10 +29,11 @@ void memateRapido() {
 void setup() {
     Serial.begin(115200);
     delay(1000);
+    firebase.setWiFiConfigurator(&wifiConfig);
     
     // Inicializa sensores e atuadores
     sensors.begin();
-    actuators.begin(4, 14, 23, 18, 19);
+    actuators.begin(4, 23, 14, 18, 19);
     
     // Configura setpoints padrão
     actuators.aplicarSetpoints(5000, 20.0, 30.0, 60.0, 80.0);
@@ -42,9 +43,20 @@ void setup() {
     if(wifiConfig.loadCredentials(ssid, password)) {
         if(wifiConfig.connectToWiFi(ssid.c_str(), password.c_str(), true)) {
             Serial.println("Conectado ao WiFi! Iniciando servidor...");
+            if(firebase.isAuthenticated() && wifiConfig.isConnected()) {
+                wifiConfig.piscaLED(true, 200);
+                delay(100);
+                wifiConfig.piscaLED(true, 50);
+            }else if(!wifiConfig.isConnected()) {
+                wifiConfig.piscaLED(true, 666666); // pisca rápido se não estiver conectado no wifi
+            } else if(!firebase.isAuthenticated()) {
+                wifiConfig.piscaLED(true, 777777); // pisca devagar se não estiver autenticado no firebase
+            } else {
+                wifiConfig.piscaLED(false, 0); // led apagado se estiver tudo ok
+            }
             
             // Obtém o ID da estufa
-            ifungiID = "IFUNGI:" + getMacAddress();
+            ifungiID = "IFUNGI-" + getMacAddress();
             Serial.println("ID da Estufa: " + ifungiID);
             qrcode.generateQRCode(ifungiID); // Gera QR code com o ID real da estufa
             
@@ -54,10 +66,33 @@ void setup() {
             String email, firebasePassword;
             if(firebase.loadFirebaseCredentials(email, firebasePassword)) {
                 Serial.println("Credenciais do Firebase encontradas, autenticando...");
+                
                 if(firebase.authenticate(email, firebasePassword)) {
                     Serial.println("Autenticação bem-sucedida!");
+                    if(firebase.isAuthenticated() && wifiConfig.isConnected()) {
+                        wifiConfig.piscaLED(true, 200);
+                        delay(100);
+                        wifiConfig.piscaLED(true, 50);
+                    }else if(!wifiConfig.isConnected()) {
+                        wifiConfig.piscaLED(true, 666666); // pisca rápido se não estiver conectado no wifi
+                    } else if(!firebase.isAuthenticated()) {
+                        wifiConfig.piscaLED(true, 777777); // pisca devagar se não estiver autenticado no firebase
+                    } else {
+                        wifiConfig.piscaLED(false, 0); // led apagado se estiver tudo ok
+                    }
                 } else {
                     Serial.println("Falha na autenticação com credenciais salvas.");
+                    if(firebase.isAuthenticated() && wifiConfig.isConnected()) {
+                        wifiConfig.piscaLED(true, 200);
+                        delay(100);
+                        wifiConfig.piscaLED(true, 50);
+                    }else if(!wifiConfig.isConnected()) {
+                        wifiConfig.piscaLED(true, 666666); // pisca rápido se não estiver conectado no wifi
+                    } else if(!firebase.isAuthenticated()) {
+                        wifiConfig.piscaLED(true, 777777); // pisca devagar se não estiver autenticado no firebase
+                    } else {
+                        wifiConfig.piscaLED(false, 0); // led apagado se estiver tudo ok
+                    }
                 }
             } else {
                 Serial.println("Nenhuma credencial do Firebase encontrada.");
@@ -65,6 +100,17 @@ void setup() {
         } else {
             wifiConfig.startAP(AP_SSID, AP_PASSWORD);
             webServer.begin(false);
+        }
+        if(firebase.isAuthenticated() && wifiConfig.isConnected()) {
+            wifiConfig.piscaLED(true, 200);
+            delay(100);
+            wifiConfig.piscaLED(true, 50);
+        }else if(!wifiConfig.isConnected()) {
+            wifiConfig.piscaLED(true, 666666); // pisca rápido se não estiver conectado no wifi
+        } else if(!firebase.isAuthenticated()) {
+            wifiConfig.piscaLED(true, 777777); // pisca devagar se não estiver autenticado no firebase
+        } else {
+            wifiConfig.piscaLED(false, 0); // led apagado se estiver tudo ok
         }
     } else {
         wifiConfig.startAP(AP_SSID, AP_PASSWORD);
@@ -77,19 +123,35 @@ void loop() {
     static unsigned long lastFirebaseUpdate = 0;
     static unsigned long lastTokenCheck = 0;
     static unsigned long lastAuthAttempt = 0;
+    static unsigned long lastSensorRead = 0;
+    static unsigned long lastActuatorControl = 0;
+    
     const unsigned long FIREBASE_INTERVAL = 5000;
     const unsigned long TOKEN_CHECK_INTERVAL = 300000;
     const unsigned long AUTH_RETRY_INTERVAL = 30000;
+    const unsigned long SENSOR_READ_INTERVAL = 2000;    // Ler sensores a cada 2 segundos
+    const unsigned long ACTUATOR_CONTROL_INTERVAL = 5000; // Controlar atuadores a cada 5 segundos
 
+    // 1. Gerencia o servidor web (não-bloqueante)
     webServer.handleClient();
-    sensors.update();
     
-    actuators.controlarAutomaticamente(
-        sensors.getTemperature(),
-        sensors.getHumidity(),
-        sensors.getLight()
-    );
+    // 2. Atualiza leituras dos sensores em intervalos regulares
+    if (millis() - lastSensorRead > SENSOR_READ_INTERVAL) {
+        sensors.update();
+        lastSensorRead = millis();
+    }
+    
+    // 3. Controle automático assíncrono dos atuadores
+    if (millis() - lastActuatorControl > ACTUATOR_CONTROL_INTERVAL) {
+        actuators.controlarAutomaticamente(
+            sensors.getTemperature(),
+            sensors.getHumidity(),
+            sensors.getLight()
+        );
+        lastActuatorControl = millis();
+    }
 
+    // 4. Lógica do Firebase (mantida como antes)
     if(firebase.isAuthenticated()) {
         if(millis() - lastTokenCheck > TOKEN_CHECK_INTERVAL) {
             firebase.refreshToken();
@@ -127,5 +189,6 @@ void loop() {
         }
     }
     
-    delay(100);
+    // Pequena pausa não-bloqueante para estabilidade
+    delay(10);
 }

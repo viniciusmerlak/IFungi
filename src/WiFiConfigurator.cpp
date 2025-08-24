@@ -5,25 +5,61 @@ void WiFiConfigurator::startAP(const char* apSSID, const char* apPassword) {
     Serial.println("AP Mode Started");
     Serial.print("SSID: "); Serial.println(apSSID);
     Serial.print("IP: "); Serial.println(WiFi.softAPIP());
+    
 }
 
+void WiFiConfigurator::piscaLED(bool on, int delayTime) {
+    pinMode(LED_BUILTIN, OUTPUT);
+    
+    if (delayTime == 666666) {
+        // Modo: LED permanentemente aceso
+        digitalWrite(LED_BUILTIN, HIGH);
+        return;
+    }
+    else if (delayTime == 777777) {
+        // Modo: pulso duplo
+        for (n = 0; n < 6; n++) {
+            digitalWrite(LED_BUILTIN, HIGH);
+            delay(200);
+            digitalWrite(LED_BUILTIN, LOW);
+            delay(500);
+            digitalWrite(LED_BUILTIN, HIGH);
+            delay(200);
+            digitalWrite(LED_BUILTIN, LOW);
+        }
+        return;
+
+    }
+    else if (on) {
+        // Modo: piscar com delay específico
+        for (n = 0; n < 3; n++) {
+            
+            digitalWrite(LED_BUILTIN, HIGH);
+            delay(delayTime);
+            digitalWrite(LED_BUILTIN, LOW);
+        }
+    }
+    else if (!on) {
+        // Desligar LED
+        digitalWrite(LED_BUILTIN, LOW);
+    }
+}
 bool WiFiConfigurator::connectToWiFi(const char* ssid, const char* password, bool persistent) {
+    
+
     Serial.println("Attempting WiFi connection...");
     Serial.print("SSID: "); Serial.println(ssid);
     
     WiFi.begin(ssid, password);
-    
     unsigned long startTime = millis();
-    bool connectionLedState = false;
     
     while (WiFi.status() != WL_CONNECTED && 
-          (millis() - startTime < WIFI_CONNECT_TIMEOUT)) {
+        (millis() - startTime < WIFI_CONNECT_TIMEOUT)) {
         delay(500);
         Serial.print(".");
         
         // Piscar LED indicando tentativa de conexão
-        digitalWrite(LED_BUILTIN, connectionLedState);
-        connectionLedState = !connectionLedState;
+
     }
     
     if (WiFi.status() == WL_CONNECTED) {
@@ -39,7 +75,7 @@ bool WiFiConfigurator::connectToWiFi(const char* ssid, const char* password, boo
     }
     
     Serial.println("\nConnection Failed!");
-    digitalWrite(LED_BUILTIN, LOW); // LED apagado indicando falha
+
     return false;
 }
 
@@ -55,8 +91,8 @@ void WiFiConfigurator::reconnectOrFallbackToAP(const char* apSSID, const char* a
         }
     }
     
-    // Se falhar, inicia o AP mode
     Serial.println("Falling back to AP mode...");
+
     startAP(apSSID, apPassword);
 }
 

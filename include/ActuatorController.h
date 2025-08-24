@@ -1,39 +1,61 @@
-#ifndef ACTUATOR_CONTROLLER_H
-#define ACTUATOR_CONTROLLER_H
-#include "FirebaseHandler.h"
+#ifndef ACTUATORCONTROLLER_H
+#define ACTUATORCONTROLLER_H
+
 #include <Arduino.h>
-class FirebaseHandler;  // Forward declaration
+#include "FirebaseHandler.h"
+
+class FirebaseHandler;
 
 class ActuatorController {
 public:
-    void begin(uint8_t pinLED, uint8_t pinRele1, uint8_t pinRele2, uint8_t pinRele3, uint8_t pinRele4);
-    void controlarAutomaticamente(float temp, float umid, int luz);
+    void begin(uint8_t pinLED, uint8_t pinRele1, uint8_t pinRele2, 
+               uint8_t pinRele3, uint8_t pinRele4);
+    void setFirebaseHandler(FirebaseHandler* handler);
     void aplicarSetpoints(int lux, float tMin, float tMax, float uMin, float uMax);
     void controlarLEDs(bool ligado, int watts);
     void controlarRele(uint8_t num, bool estado);
-    void controlarPeltier(bool resfriar, bool potencia);
-    void controlarUmidificador(bool ligado);
-    void controlarExaustor(bool ligado);
-    bool AquecerPastilha(bool);
-    void setFirebaseHandler(FirebaseHandler* handler);  // Adicione esta linha
+    void controlarPeltier(bool resfriar, bool ligar);
+    void controlarAutomaticamente(float temp, float umid, int luz);
+    bool AquecerPastilha(bool ligar);
+    
+    enum ModoPeltier {
+        DESLIGADO,
+        AQUECENDO,
+        RESFRIANDO
+    };
     
 private:
-    FirebaseHandler* firebaseHandler = nullptr;  // Adicione esta linha
-    unsigned long lastFirebaseUpdate = 0;
-    const unsigned long UPDATE_INTERVAL = 2000; // 2 segundos
-    uint8_t _pinLED;
-    uint8_t _pinRele1;
-    uint8_t _pinRele2;
-    uint8_t _pinRele3;
-    uint8_t _pinRele4;
-    float tempMin = 20.0;
-    float tempMax = 25.0;
-    float umidMin = 40.0;
-    float umidMax = 70.0;
-    int luxSetpoint = 500;
-    unsigned long lastPeltierTime = 0;
-    const unsigned long peltierTimeout = 10000; // 10 segundos
+    uint8_t _pinLED, _pinRele1, _pinRele2, _pinRele3, _pinRele4;
+    FirebaseHandler* firebaseHandler = nullptr;
+    
+    // Variáveis de estado
+    bool umidLigado = false;
     bool peltierHeating = false;
+    unsigned long lastPeltierTime = 0;
+    unsigned long inicioCooldown = 0;
+    
+    // Setpoints
+    int luxSetpoint = 5000;
+    float tempMin = 20.0;
+    float tempMax = 30.0;
+    float umidMin = 60.0;
+    float umidMax = 80.0;
+    
+    // Novas variáveis para controle de estado
+    ModoPeltier modoPeltierAtual = DESLIGADO;
+    int intensidadeLEDAtual = 0;
+    bool rele1Estado = false;
+    bool rele2Estado = false;
+    bool rele3Estado = false;
+    bool rele4Estado = false;
+    unsigned long lastUpdateTime = 0;
+    
+    // Variáveis de segurança da Peltier
+    bool emCooldown = false;
+    const unsigned long tempoOperacao = 10000; // 10 segundos de operação
+    const unsigned long tempoCooldown = 10000; // 10 segundos de cooldown
+    
+    void atualizarEstadoFirebase();
 };
 
 #endif
