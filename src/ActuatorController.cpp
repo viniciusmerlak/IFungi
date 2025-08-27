@@ -148,6 +148,16 @@ void ActuatorController::controlarAutomaticamente(float temp, float umid, int lu
     }
     
     // 2. Controle de umidade - Umidificador (Rele 3) com histerese
+    if (!waterLevel) {
+        Serial.println("[SEGURANÇA] Nível de água baixo, não operar umidificador");
+        if (umidLigado) {
+            controlarRele(3, true); // Desliga o umidificador se estiver ligado
+            controlarRele(3, false); // Liga por pulso curto
+            umidLigado = false;
+        }
+        // Não tenta ligar o umidificador se o nível de água estiver baixo
+    } 
+    else
     if (umid < (umidMin - HYSTERESIS_UMID) && !umidLigado && !waterLevel) {
         Serial.printf("[ATUADOR] Umidade abaixo (%.1f < %.1f), ligando umidificador\n", umid, umidMin);
         
@@ -284,7 +294,8 @@ void ActuatorController::atualizarEstadoFirebase() {
             rele3Estado, 
             rele4Estado, 
             (intensidadeLEDAtual > 0), 
-            intensidadeLEDAtual
+            intensidadeLEDAtual,
+            umidLigado
         );
     }
 }

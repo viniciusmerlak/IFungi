@@ -135,7 +135,7 @@ bool FirebaseHandler::authenticate(const String& email, const String& password) 
 
 
 void FirebaseHandler::atualizarEstadoAtuadores(bool rele1, bool rele2, bool rele3, bool rele4, 
-                                             bool ledsLigado, int ledsWatts) {
+                                             bool ledsLigado, int ledsWatts, bool umidLigado) {
     if (!authenticated || !Firebase.ready()) {
         Serial.println("Não autenticado para atualizar atuadores");
         return;
@@ -159,6 +159,7 @@ void FirebaseHandler::atualizarEstadoAtuadores(bool rele1, bool rele2, bool rele
     // Adiciona timestamp
     json.set("lastUpdate", millis());
     json.set("atuadores", atuadores);
+    json.set("umidificador", umidLigado);
 
     String path = FirebaseHandler::getEstufasPath() + estufaId;
     

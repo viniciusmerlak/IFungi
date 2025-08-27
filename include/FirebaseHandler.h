@@ -34,7 +34,7 @@ public:
     bool isAuthenticated() const;
     bool authenticate(const String& email, const String& password);
     void resetAuthAttempts();
-    void atualizarEstadoAtuadores(bool rele1, bool rele2, bool rele3, bool rele4, bool ledsLigado, int ledsWatts);
+    void atualizarEstadoAtuadores(bool rele1, bool rele2, bool rele3, bool rele4, bool ledsLigado, int ledsWatts, bool umidLigado);
     bool permissaoUser(const String& userUID, const String& estufaID);
     void criarEstufaInicial(const String& usuarioCriador, const String& usuarioAtual);
     bool estufaExiste(const String& estufaId);
