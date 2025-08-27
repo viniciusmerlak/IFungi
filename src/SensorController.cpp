@@ -107,6 +107,7 @@ void SensorController::update() {
             tvocs = ccs.getTVOC();
         }
         waterLevel = digitalRead(WATERLEVEL_PIN); // Leitura do sensor de nível de água
+        waterLevel = !waterLevel; // Inverte o valor, pois LOW indica nível baixo
         lastUpdate = millis();
     }
 }

@@ -31,7 +31,7 @@ bool ActuatorController::carregarSetpointsNVS() {
     
     // Carrega os valores, se não existir, retorna false
     if(preferences.isKey("lux")) {
-        luxSetpoint = preferences.getInt("lux", 5000);
+        luxSetpoint = preferences.getInt("lux", 100);
         tempMin = preferences.getFloat("tMin", 20.0);
         tempMax = preferences.getFloat("tMax", 30.0);
         umidMin = preferences.getFloat("uMin", 60.0);
