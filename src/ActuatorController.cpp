@@ -110,7 +110,7 @@ void ActuatorController::aplicarSetpoints(int lux, float tMin, float tMax, float
                  lux, tMin, tMax, uMin, uMax, coSp, co2Sp, tvocsSp);
 }
 
-void ActuatorController::controlarAutomaticamente(float temp, float umid, int luz, int co, int co2, int tvocs) {
+void ActuatorController::controlarAutomaticamente(float temp, float umid, int luz, int co, int co2, int tvocs, bool waterLevel) {
     // Verificar segurança da Peltier (apenas para aquecimento)
     if (peltierHeating && modoPeltierAtual == AQUECENDO && 
         (millis() - lastPeltierTime >= tempoOperacao)) {
@@ -148,14 +148,14 @@ void ActuatorController::controlarAutomaticamente(float temp, float umid, int lu
     }
     
     // 2. Controle de umidade - Umidificador (Rele 3) com histerese
-    if (umid < (umidMin - HYSTERESIS_UMID) && !umidLigado) {
+    if (umid < (umidMin - HYSTERESIS_UMID) && !umidLigado && !waterLevel) {
         Serial.printf("[ATUADOR] Umidade abaixo (%.1f < %.1f), ligando umidificador\n", umid, umidMin);
         
         controlarRele(3, true);
         controlarRele(3, false); // Liga por pulso curto
         umidLigado = true;
     } 
-    else if (umid > (umidMax + HYSTERESIS_UMID) && umidLigado) {
+    else if (umid > (umidMax + HYSTERESIS_UMID) && umidLigado && !waterLevel) {
         Serial.printf("[ATUADOR] Umidade acima (%.1f > %.1f), desligando umidificador\n", umid, umidMax);
         controlarRele(3, true);
         controlarRele(3, false); // Liga por pulso curto

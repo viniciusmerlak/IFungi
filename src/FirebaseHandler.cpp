@@ -1,9 +1,8 @@
 #include "FirebaseHandler.h"
+
+// Add these includes at the top:
 #include <addons/TokenHelper.h>
 #include <addons/RTDBHelper.h>
-#include <Preferences.h>
-
-
 
 String FirebaseHandler::getMacAddress() {
     uint8_t mac[6];
@@ -214,14 +213,21 @@ void FirebaseHandler::verificarEstufa() {
         criarEstufaInicial(userUID, userUID);
     }
 }
+FirebaseHandler::FirebaseHandler() 
+    : timeClient(ntpUDP, "pool.ntp.org", -3 * 3600, 60000) {
+    // Inicializações adicionais se necessário
+}
+FirebaseHandler::~FirebaseHandler() {
+    // Limpeza se necessário
+}
 
-void FirebaseHandler::enviarDadosParaHistorico(float temp, float umid, int co2, int co, int lux, int tvocs) {
+bool FirebaseHandler::enviarDadosParaHistorico(float temp, float umid, int co2, int co, int lux, int tvocs) {
+    // Implementação existente, mas retornando true/false conforme sucesso
     if (!authenticated || !Firebase.ready()) {
-        return;
+        return false;
     }
 
-    // Usar timestamp como chave para garantir ordem cronológica
-    String timestamp = String(millis());
+    String timestamp = String(getCurrentTimestamp());
     String path = "/historico/" + estufaId + "/" + timestamp;
     
     FirebaseJson json;
@@ -230,19 +236,269 @@ void FirebaseHandler::enviarDadosParaHistorico(float temp, float umid, int co2, 
     json.set("umidade", umid);
     json.set("co2", co2);
     json.set("co", co);
-    json.set("tvocs", tvocs); // Use the paramete
+    json.set("tvocs", tvocs);
     json.set("luminosidade", lux);
-    json.set("dataHora", "2023-01-01T10:00:00Z"); // Você pode preencher com tempo real se tiver RTC
+    json.set("dataHora", getFormattedDateTime());
     
     if (Firebase.setJSON(fbdo, path.c_str(), json)) {
         Serial.println("Dados salvos no histórico com sucesso!");
+        return true;
     } else {
         Serial.println("Falha ao salvar histórico: " + fbdo.errorReason());
+        return false;
     }
 }
 
+
+unsigned long FirebaseHandler::getCurrentTimestamp() {
+    // Inicializar NTP se necessário
+    static bool ntpInicializado = false;
+    if (!ntpInicializado && WiFi.status() == WL_CONNECTED) {
+        timeClient.begin();
+        ntpInicializado = true;
+    }
+    
+    if (WiFi.status() == WL_CONNECTED) {
+        timeClient.update();
+        return timeClient.getEpochTime();
+    } else {
+        // Fallback: usar millis() com offset baseado na última hora conhecida
+        static unsigned long millisOffset = 0;
+        if (millisOffset == 0) {
+            // Tentar recuperar último timestamp salvo na NVS
+            if (inicializarNVS() && preferences.begin(NAMESPACE, true)) {
+                millisOffset = preferences.getULong("ultimo_timestamp", 0) - (millis() / 1000);
+                preferences.end();
+            }
+        }
+        return (millis() / 1000) + millisOffset;
+    }
+}
+
+
+String FirebaseHandler::getFormattedDateTime() {
+    unsigned long timestamp = getCurrentTimestamp();
+    if (timestamp > 1609459200) { // Timestamp válido (após 1/1/2021)
+        time_t time = timestamp;
+        struct tm *tm = gmtime(&time);
+        char buffer[25];
+        strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%SZ", tm);
+        return String(buffer);
+    }
+    return ""; // Retornar string vazia se não houver tempo disponível
+}
+
+void FirebaseHandler::limitarHistorico() {
+    const int MAX_ENTRIES = 1000;
+    
+    String path = "/historico/" + estufaId;
+    
+    if (Firebase.getInt(fbdo, path + "/_count")) {
+        int currentCount = fbdo.to<int>();
+        
+        if (currentCount > MAX_ENTRIES) {
+            int entriesToRemove = currentCount - MAX_ENTRIES;
+            Serial.println("Removendo " + String(entriesToRemove) + " entradas antigas do histórico");
+            
+            // Usar QueryFilter corretamente
+            QueryFilter query;
+            query.orderBy("$key");
+            query.limitToFirst(entriesToRemove);
+            
+            if (Firebase.getJSON(fbdo, path.c_str(), query)) {
+                FirebaseJson *json = fbdo.jsonObjectPtr();
+                
+                size_t count = json->iteratorBegin();
+                for (size_t i = 0; i < count; i++) {
+                    FirebaseJson::IteratorValue value = json->valueAt(i); // Corrigido para valueAt
+                    String key = value.key.c_str();
+                    
+                    if (Firebase.deleteNode(fbdo, path + "/" + key)) {
+                        Serial.println("Removida entrada antiga: " + key);
+                    } else {
+                        Serial.println("Falha ao remover entrada: " + key);
+                    }
+                }
+                json->iteratorEnd();
+            }
+            query.clear();
+        }
+    } else {
+        Firebase.setInt(fbdo, path + "/_count", 0);
+    }
+}
+
+void FirebaseHandler::salvarDadosLocalmente(float temp, float umid, int co2, int co, int lux, int tvocs, unsigned long timestamp) {
+    if (!inicializarNVS()) {
+        Serial.println("Não foi possível salvar dados - NVS não disponível");
+        return;
+    }
+    
+    if (!preferences.begin(NAMESPACE, false)) {
+        Serial.println("Falha ao abrir Preferences para escrita");
+        return;
+    }
+    
+    // Obter o número atual de registros
+    int numRegistros = preferences.getInt("num_registros", 0);
+    
+    // Se atingiu o máximo, implementar rotação FIFO
+    if (numRegistros >= MAX_REGISTROS) {
+        // Mover todos os registros uma posição para frente (removendo o mais antigo)
+        for (int i = 1; i < MAX_REGISTROS; i++) {
+            preferences.putFloat(("temp_" + String(i - 1)).c_str(), preferences.getFloat(("temp_" + String(i)).c_str(), 0));
+            preferences.putFloat(("umid_" + String(i - 1)).c_str(), preferences.getFloat(("umid_" + String(i)).c_str(), 0));
+            preferences.putInt(("co2_" + String(i - 1)).c_str(), preferences.getInt(("co2_" + String(i)).c_str(), 0));
+            preferences.putInt(("co_" + String(i - 1)).c_str(), preferences.getInt(("co_" + String(i)).c_str(), 0));
+            preferences.putInt(("lux_" + String(i - 1)).c_str(), preferences.getInt(("lux_" + String(i)).c_str(), 0));
+            preferences.putInt(("tvocs_" + String(i - 1)).c_str(), preferences.getInt(("tvocs_" + String(i)).c_str(), 0));
+            preferences.putULong(("timestamp_" + String(i - 1)).c_str(), preferences.getULong(("timestamp_" + String(i)).c_str(), 0));
+        }
+        numRegistros = MAX_REGISTROS - 1;
+    }
+    
+    // Salvar novo registro
+    int novoIndice = numRegistros;
+    preferences.putFloat(("temp_" + String(novoIndice)).c_str(), temp);
+    preferences.putFloat(("umid_" + String(novoIndice)).c_str(), umid);
+    preferences.putInt(("co2_" + String(novoIndice)).c_str(), co2);
+    preferences.putInt(("co_" + String(novoIndice)).c_str(), co);
+    preferences.putInt(("lux_" + String(novoIndice)).c_str(), lux);
+    preferences.putInt(("tvocs_" + String(novoIndice)).c_str(), tvocs);
+    preferences.putULong(("timestamp_" + String(novoIndice)).c_str(), timestamp);
+    
+    // Atualizar contador e último timestamp
+    preferences.putInt("num_registros", numRegistros + 1);
+    preferences.putULong("ultimo_timestamp", timestamp);
+    
+    preferences.end();
+    
+    Serial.println("Dados salvos localmente. Registro: " + String(novoIndice));
+}
+bool FirebaseHandler::inicializarNVS() {
+    if (nvsInicializada) return true;
+    
+    if (!preferences.begin(NAMESPACE, true)) {
+        Serial.println("Falha ao abrir namespace da NVS");
+        return false;
+    }
+    
+    // Verificar se a NVS foi inicializada corretamente
+    size_t freeEntries = preferences.freeEntries();
+    Serial.println("Espaço livre na NVS: " + String(freeEntries));
+    
+    // Se a NVS estiver completamente vazia, inicializar valores padrão
+    if (preferences.getInt("nvs_inicializada", 0) == 0) {
+        Serial.println("NVS não inicializada, configurando valores padrão...");
+        
+        preferences.end();
+        if (!preferences.begin(NAMESPACE, false)) {
+            Serial.println("Falha ao abrir NVS para escrita");
+            return false;
+        }
+        
+        preferences.putInt("num_registros", 0);
+        preferences.putInt("nvs_inicializada", 1); // Marcar como inicializada
+        
+        Serial.println("NVS inicializada com sucesso");
+    }
+    
+    preferences.end();
+    nvsInicializada = true;
+    return true;
+}
+void FirebaseHandler::enviarDadosLocais() {
+    if (!inicializarNVS()) {
+        Serial.println("Não foi possível enviar dados locais - NVS não disponível");
+        return;
+    }
+    
+    if (!preferences.begin(NAMESPACE, true)) {
+        Serial.println("Falha ao abrir Preferences para leitura");
+        return;
+    }
+    
+    int numRegistros = preferences.getInt("num_registros", 0);
+    Serial.println("Tentando enviar " + String(numRegistros) + " registros locais");
+    
+    preferences.end();
+    
+    // Abrir para escrita após a leitura
+    if (!preferences.begin(NAMESPACE, false)) {
+        Serial.println("Falha ao abrir Preferences para escrita");
+        return;
+    }
+    
+    for (int i = 0; i < numRegistros; i++) {
+        // Ler dados do registro
+        float temp = preferences.getFloat(("temp_" + String(i)).c_str(), 0);
+        float umid = preferences.getFloat(("umid_" + String(i)).c_str(), 0);
+        int co2 = preferences.getInt(("co2_" + String(i)).c_str(), 0);
+        int co = preferences.getInt(("co_" + String(i)).c_str(), 0);
+        int lux = preferences.getInt(("lux_" + String(i)).c_str(), 0);
+        int tvocs = preferences.getInt(("tvocs_" + String(i)).c_str(), 0);
+        unsigned long timestamp = preferences.getULong(("timestamp_" + String(i)).c_str(), 0);
+        
+        // Tentar enviar para o Firebase
+        if (Firebase.ready() && authenticated) {
+            if (enviarDadosParaHistorico(temp, umid, co2, co, lux, tvocs)) {
+                // Remover o registro enviado
+                preferences.remove(("temp_" + String(i)).c_str());
+                preferences.remove(("umid_" + String(i)).c_str());
+                preferences.remove(("co2_" + String(i)).c_str());
+                preferences.remove(("co_" + String(i)).c_str());
+                preferences.remove(("lux_" + String(i)).c_str());
+                preferences.remove(("tvocs_" + String(i)).c_str());
+                preferences.remove(("timestamp_" + String(i)).c_str());
+            } else {
+                Serial.println("Falha ao enviar registro " + String(i) + ", parando...");
+                break;
+            }
+        } else {
+            Serial.println("Firebase não disponível, parando envio...");
+            break;
+        }
+    }
+    
+    // Reorganizar registros restantes (compactação)
+    int novosRegistros = 0;
+    for (int i = 0; i < numRegistros; i++) {
+        // Verificar se o registro ainda existe
+        if (preferences.isKey(("temp_" + String(i)).c_str())) {
+            if (i != novosRegistros) {
+                // Mover registro para posição compactada
+                preferences.putFloat(("temp_" + String(novosRegistros)).c_str(), preferences.getFloat(("temp_" + String(i)).c_str(), 0));
+                preferences.putFloat(("umid_" + String(novosRegistros)).c_str(), preferences.getFloat(("umid_" + String(i)).c_str(), 0));
+                preferences.putInt(("co2_" + String(novosRegistros)).c_str(), preferences.getInt(("co2_" + String(i)).c_str(), 0));
+                preferences.putInt(("co_" + String(novosRegistros)).c_str(), preferences.getInt(("co_" + String(i)).c_str(), 0));
+                preferences.putInt(("lux_" + String(novosRegistros)).c_str(), preferences.getInt(("lux_" + String(i)).c_str(), 0));
+                preferences.putInt(("tvocs_" + String(novosRegistros)).c_str(), preferences.getInt(("tvocs_" + String(i)).c_str(), 0));
+                preferences.putULong(("timestamp_" + String(novosRegistros)).c_str(), preferences.getULong(("timestamp_" + String(i)).c_str(), 0));
+                
+                // Remover registro original
+                preferences.remove(("temp_" + String(i)).c_str());
+                preferences.remove(("umid_" + String(i)).c_str());
+                preferences.remove(("co2_" + String(i)).c_str());
+                preferences.remove(("co_" + String(i)).c_str());
+                preferences.remove(("lux_" + String(i)).c_str());
+                preferences.remove(("tvocs_" + String(i)).c_str());
+                preferences.remove(("timestamp_" + String(i)).c_str());
+            }
+            novosRegistros++;
+        }
+    }
+    
+    // Atualizar contador
+    preferences.putInt("num_registros", novosRegistros);
+    
+    preferences.end();
+    
+    Serial.println("Envios locais concluídos. Restam: " + String(novosRegistros) + " registros.");
+}
+
+
 // Modifique o método enviarDadosSensores existente:
-void FirebaseHandler::enviarDadosSensores(float temp, float umid, int co2, int co, int lux, int tvocs) {
+void FirebaseHandler::enviarDadosSensores(float temp, float umid, int co2, int co, int lux, int tvocs, bool waterLevel) {
     refreshTokenIfNeeded();
     if (!authenticated || !Firebase.ready()) {
         Serial.println("Não autenticado ou token inválido");
@@ -258,6 +514,7 @@ void FirebaseHandler::enviarDadosSensores(float temp, float umid, int co2, int c
     json.set("sensores/tvocs", tvocs); // Use the parameter
     json.set("sensores/luminosidade", lux);
     json.set("lastUpdate", millis());
+    json.set("niveis/agua",waterLevel); // Adicionado o nível de água
 
     String path = "/estufas/" + estufaId;
     Firebase.updateNode(fbdo, path.c_str(), json);

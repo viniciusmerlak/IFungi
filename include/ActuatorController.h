@@ -14,7 +14,7 @@ public:
     void controlarLEDs(bool ligado, int watts);
     void controlarRele(uint8_t num, bool estado);
     void controlarPeltier(bool resfriar, bool ligar);
-    void controlarAutomaticamente(float temp, float umid, int luz, int co, int co2, int tvocs);
+    void controlarAutomaticamente(float temp, float umid, int luz, int co, int co2, int tvocs, bool waterLevel);
     bool AquecerPastilha(bool ligar);
     void salvarSetpointsNVS();
     bool carregarSetpointsNVS();

@@ -88,6 +88,7 @@ void SensorController::begin() {
     temperature = 0;
     humidity = 0;
     light = 0;
+    waterLevel = false;
 }
 
 void SensorController::update() {
@@ -105,7 +106,7 @@ void SensorController::update() {
             co2 = ccs.geteCO2();
             tvocs = ccs.getTVOC();
         }
-        
+        waterLevel = digitalRead(WATERLEVEL_PIN); // Leitura do sensor de nível de água
         lastUpdate = millis();
     }
 }
@@ -116,3 +117,4 @@ int SensorController::getCO2() { return co2; }
 int SensorController::getCO() { return co; }
 int SensorController::getTVOCs() { return tvocs; }
 int SensorController::getLight() { return light; }
+bool SensorController::getWaterLevel() { return waterLevel; }

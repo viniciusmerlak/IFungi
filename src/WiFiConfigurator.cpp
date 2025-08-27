@@ -20,11 +20,11 @@ void WiFiConfigurator::piscaLED(bool on, int delayTime) {
         // Modo: pulso duplo
         for (n = 0; n < 6; n++) {
             digitalWrite(LED_BUILTIN, HIGH);
-            delay(200);
+            delay(100);
             digitalWrite(LED_BUILTIN, LOW);
-            delay(500);
+            delay(300);
             digitalWrite(LED_BUILTIN, HIGH);
-            delay(200);
+            delay(100);
             digitalWrite(LED_BUILTIN, LOW);
         }
         return;

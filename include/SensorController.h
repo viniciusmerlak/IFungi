@@ -7,7 +7,7 @@ class SensorController {
 public:
     void begin();
     void update();
-    
+    bool getWaterLevel();
     float getTemperature();
     float getHumidity();
     int getCO2();
@@ -38,6 +38,7 @@ private:
     int co;
     int tvocs;
     int light;
+    bool waterLevel;
 };
 
 #endif

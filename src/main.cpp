@@ -25,7 +25,21 @@ void memateRapido() {
         webServer.begin(true);
     }
 }
-
+void ledes(){
+    if(firebase.isAuthenticated() && wifiConfig.isConnected()) {
+        wifiConfig.piscaLED(true, 666666); // mantem ligado se tudo estiver ok
+        return; // Se tudo estiver ok, não faz nada
+    }
+    if(firebase.isAuthenticated() && wifiConfig.isConnected()) {
+        wifiConfig.piscaLED(true, 200); // pisca rapido
+    }else if(!wifiConfig.isConnected()) {
+        wifiConfig.piscaLED(true, 666666); // pisca rápido se não estiver conectado no wifi
+    } else if(!firebase.isAuthenticated()) {
+        wifiConfig.piscaLED(true, 777777); // pisca em pulso
+    } else {
+        wifiConfig.piscaLED(false, 0); // led apagado se estiver tudo ok
+    }
+}
 void setup() {
     Serial.begin(115200);
     delay(1000);
@@ -46,18 +60,7 @@ void setup() {
     if(wifiConfig.loadCredentials(ssid, password)) {
         if(wifiConfig.connectToWiFi(ssid.c_str(), password.c_str(), true)) {
             Serial.println("Conectado ao WiFi! Iniciando servidor...");
-            if(firebase.isAuthenticated() && wifiConfig.isConnected()) {
-                wifiConfig.piscaLED(true, 200);
-                delay(100);
-                wifiConfig.piscaLED(true, 50);
-            }else if(!wifiConfig.isConnected()) {
-                wifiConfig.piscaLED(true, 666666); // pisca rápido se não estiver conectado no wifi
-            } else if(!firebase.isAuthenticated()) {
-                wifiConfig.piscaLED(true, 777777); // pisca devagar se não estiver autenticado no firebase
-            } else {
-                wifiConfig.piscaLED(false, 0); // led apagado se estiver tudo ok
-            }
-            
+            ledes();
             // Obtém o ID da estufa
             ifungiID = "IFUNGI-" + getMacAddress();
             Serial.println("ID da Estufa: " + ifungiID);
@@ -67,62 +70,38 @@ void setup() {
             
             // Tenta autenticar com credenciais salvas
             String email, firebasePassword;
+            ledes();
             if(firebase.loadFirebaseCredentials(email, firebasePassword)) {
                 Serial.println("Credenciais do Firebase encontradas, autenticando...");
                 
                 if(firebase.authenticate(email, firebasePassword)) {
                     Serial.println("Autenticação bem-sucedida!");
-                    if(firebase.isAuthenticated() && wifiConfig.isConnected()) {
-                        wifiConfig.piscaLED(true, 200);
-                        delay(100);
-                        wifiConfig.piscaLED(true, 50);
-                    }else if(!wifiConfig.isConnected()) {
-                        wifiConfig.piscaLED(true, 666666); // pisca rápido se não estiver conectado no wifi
-                    } else if(!firebase.isAuthenticated()) {
-                        wifiConfig.piscaLED(true, 777777); // pisca devagar se não estiver autenticado no firebase
-                    } else {
-                        wifiConfig.piscaLED(false, 0); // led apagado se estiver tudo ok
-                    }
+                    ledes();
                 } else {
                     Serial.println("Falha na autenticação com credenciais salvas.");
-                    if(firebase.isAuthenticated() && wifiConfig.isConnected()) {
-                        wifiConfig.piscaLED(true, 200);
-                        delay(100);
-                        wifiConfig.piscaLED(true, 50);
-                    }else if(!wifiConfig.isConnected()) {
-                        wifiConfig.piscaLED(true, 666666); // pisca rápido se não estiver conectado no wifi
-                    } else if(!firebase.isAuthenticated()) {
-                        wifiConfig.piscaLED(true, 777777); // pisca devagar se não estiver autenticado no firebase
-                    } else {
-                        wifiConfig.piscaLED(false, 0); // led apagado se estiver tudo ok
-                    }
+                    ledes();
                 }
             } else {
                 Serial.println("Nenhuma credencial do Firebase encontrada.");
+                ledes();
             }
         } else {
             wifiConfig.startAP(AP_SSID, AP_PASSWORD);
             webServer.begin(false);
+            ledes();
         }
-        if(firebase.isAuthenticated() && wifiConfig.isConnected()) {
-            wifiConfig.piscaLED(true, 200);
-            delay(100);
-            wifiConfig.piscaLED(true, 50);
-        }else if(!wifiConfig.isConnected()) {
-            wifiConfig.piscaLED(true, 666666); // pisca rápido se não estiver conectado no wifi
-        } else if(!firebase.isAuthenticated()) {
-            wifiConfig.piscaLED(true, 777777); // pisca devagar se não estiver autenticado no firebase
-        } else {
-            wifiConfig.piscaLED(false, 0); // led apagado se estiver tudo ok
-        }
+        ledes();
     } else {
         wifiConfig.startAP(AP_SSID, AP_PASSWORD);
         webServer.begin(false);
+        ledes();
     }
     actuators.setFirebaseHandler(&firebase);
+    ledes();
 }
 
 void loop() {
+    ledes();
     static unsigned long lastFirebaseUpdate = 0;
     static unsigned long lastTokenCheck = 0;
     static unsigned long lastAuthAttempt = 0;
@@ -154,7 +133,8 @@ void loop() {
             sensors.getLight(),
             sensors.getCO(),
             sensors.getCO2(),
-            sensors.getTVOCs()
+            sensors.getTVOCs(),
+            sensors.getWaterLevel() // Adicionado o sensor de nível de água
         );
         lastActuatorControl = millis();
     }
@@ -180,7 +160,8 @@ void loop() {
                     sensors.getCO2(),
                     sensors.getCO(),
                     sensors.getLight(),
-                    sensors.getTVOCs() // Add this
+                    sensors.getTVOCs(), // Add this
+                    sensors.getWaterLevel() // Adicionado o sensor de nível de água
                 );
                 
                 firebase.verificarComandos(actuators);
