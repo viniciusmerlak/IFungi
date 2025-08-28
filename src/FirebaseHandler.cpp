@@ -155,11 +155,12 @@ void FirebaseHandler::atualizarEstadoAtuadores(bool rele1, bool rele2, bool rele
     leds.set("ligado", ledsLigado);
     leds.set("watts", ledsWatts);
     atuadores.set("leds", leds);
+    json.set("umidificador", umidLigado);
+
     
     // Adiciona timestamp
     json.set("lastUpdate", millis());
-    json.set("atuadores", atuadores);
-    json.set("umidificador", umidLigado);
+
 
     String path = FirebaseHandler::getEstufasPath() + estufaId;
     
