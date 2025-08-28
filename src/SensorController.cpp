@@ -107,6 +107,8 @@ void SensorController::update() {
             tvocs = ccs.getTVOC();
         }
         waterLevel = digitalRead(WATERLEVEL_PIN); // Leitura do sensor de nível de água
+        bool waterLevel = !waterLevel; // Inverte o valor para facilitar a interpretação (LOW = cheio, HIGH = vazio)
+        Serial.printf("Leituras - Temp: %.1f C, Umid: %.1f %%, Luz: %d, CO: %d, CO2: %d ppm, TVOCs: %d ppb, Nível de água: %s\n", temperature, humidity, light, co, co2, tvocs, waterLevel ? "Baixo" : "Ok");
         lastUpdate = millis();
     }
 }
