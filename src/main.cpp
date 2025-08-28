@@ -5,7 +5,7 @@
 #include "SensorController.h"
 #include "ActuatorController.h"
 #include "perdiavontadedeviver.h"
-#include "genQrCode.h"  // Corrigido o nome do arquivo
+#include "genQrCode.h"
 
 const char* AP_SSID = "IFungi-Config";
 const char* AP_PASSWORD = "config1234";
@@ -17,6 +17,14 @@ GenQR qrcode;
 SensorController sensors;
 ActuatorController actuators;
 
+// Declarações de funções
+void memateRapido();
+void updateStatusLED();
+void setupSensorsAndActuators();
+void setupWiFiAndFirebase();
+void handleFirebaseOperations();
+void handleRegularIntervals();
+
 void memateRapido() {
     String email, password;
     Serial.println("iniciando loop até loadFirebaseCredentials retornar true");
@@ -25,127 +33,85 @@ void memateRapido() {
         webServer.begin(true);
     }
 }
-void ledes(){
+
+void updateStatusLED() {
     if(firebase.isAuthenticated() && wifiConfig.isConnected()) {
-        wifiConfig.piscaLED(true, 666666); // mantem ligado se tudo estiver ok
-        return; // Se tudo estiver ok, não faz nada
-    }
-    if(firebase.isAuthenticated() && wifiConfig.isConnected()) {
-        wifiConfig.piscaLED(true, 200); // pisca rapido
-    }else if(!wifiConfig.isConnected()) {
-        wifiConfig.piscaLED(true, 666666); // pisca rápido se não estiver conectado no wifi
+        wifiConfig.piscaLED(true, 666666);
+        return;
+    } else if(!wifiConfig.isConnected()) {
+        wifiConfig.piscaLED(true, 666666);
+        return;
     } else if(!firebase.isAuthenticated()) {
-        wifiConfig.piscaLED(true, 777777); // pisca em pulso
+        wifiConfig.piscaLED(true, 777777);
+        return;
     } else {
-        wifiConfig.piscaLED(false, 0); // led apagado se estiver tudo ok
+        wifiConfig.piscaLED(true, 20000);
+        return;
     }
 }
-void setup() {
-    Serial.begin(115200);
-    delay(1000);
-    firebase.setWiFiConfigurator(&wifiConfig);
-    
-    // Inicializa sensores e atuadores
+
+void setupSensorsAndActuators() {
     sensors.begin();
     actuators.begin(4, 23, 14, 18, 19);
     
-    // Tenta carregar setpoints do NVS, se não existir, usa os padrões
     if(!actuators.carregarSetpointsNVS()) {
-        // Configura setpoints padrão
         actuators.aplicarSetpoints(5000, 20.0, 30.0, 60.0, 80.0, 400, 400, 100);
     }
+}
 
-    // Tenta conectar com WiFi salvo
+void setupWiFiAndFirebase() {
     String ssid, password;
     if(wifiConfig.loadCredentials(ssid, password)) {
         if(wifiConfig.connectToWiFi(ssid.c_str(), password.c_str(), true)) {
             Serial.println("Conectado ao WiFi! Iniciando servidor...");
-            ledes();
-            // Obtém o ID da estufa
+            updateStatusLED();
+            
             ifungiID = "IFUNGI-" + getMacAddress();
             Serial.println("ID da Estufa: " + ifungiID);
-            qrcode.generateQRCode(ifungiID); // Gera QR code com o ID real da estufa
+            qrcode.generateQRCode(ifungiID);
             
             webServer.begin(true);
             
-            // Tenta autenticar com credenciais salvas
             String email, firebasePassword;
-            ledes();
+            updateStatusLED();
             if(firebase.loadFirebaseCredentials(email, firebasePassword)) {
                 Serial.println("Credenciais do Firebase encontradas, autenticando...");
                 
                 if(firebase.authenticate(email, firebasePassword)) {
                     Serial.println("Autenticação bem-sucedida!");
-                    ledes();
+                    updateStatusLED();
                 } else {
                     Serial.println("Falha na autenticação com credenciais salvas.");
-                    ledes();
+                    updateStatusLED();
                 }
             } else {
                 Serial.println("Nenhuma credencial do Firebase encontrada.");
-                ledes();
+                updateStatusLED();
             }
         } else {
             wifiConfig.startAP(AP_SSID, AP_PASSWORD);
             webServer.begin(false);
-            ledes();
+            updateStatusLED();
         }
-        ledes();
+        updateStatusLED();
     } else {
         wifiConfig.startAP(AP_SSID, AP_PASSWORD);
         webServer.begin(false);
-        ledes();
+        updateStatusLED();
     }
     actuators.setFirebaseHandler(&firebase);
-    ledes();
+    updateStatusLED();
 }
 
-void loop() {
-    ledes();
+void handleFirebaseOperations() {
     static unsigned long lastFirebaseUpdate = 0;
     static unsigned long lastTokenCheck = 0;
     static unsigned long lastAuthAttempt = 0;
-    static unsigned long lastSensorRead = 0;
-    static unsigned long lastActuatorControl = 0;
-    static unsigned long lastHeartbeat = 0; // Novo
     
     const unsigned long FIREBASE_INTERVAL = 5000;
     const unsigned long TOKEN_CHECK_INTERVAL = 300000;
     const unsigned long AUTH_RETRY_INTERVAL = 30000;
-    const unsigned long SENSOR_READ_INTERVAL = 2000;
-    const unsigned long ACTUATOR_CONTROL_INTERVAL = 5000;
-    const unsigned long HEARTBEAT_INTERVAL = 15000; // 30 segundos
 
-    // 1. Gerencia o servidor web
-    webServer.handleClient();
-    
-    // 2. Atualiza leituras dos sensores
-    if (millis() - lastSensorRead > SENSOR_READ_INTERVAL) {
-        sensors.update();
-        lastSensorRead = millis();
-    }
-    
-    // 3. Controle automático dos atuadores
-    if (millis() - lastActuatorControl > ACTUATOR_CONTROL_INTERVAL) {
-        actuators.controlarAutomaticamente(
-            sensors.getTemperature(),
-            sensors.getHumidity(),
-            sensors.getLight(),
-            sensors.getCO(),
-            sensors.getCO2(),
-            sensors.getTVOCs(),
-            sensors.getWaterLevel() // Adicionado o sensor de nível de água
-        );
-        lastActuatorControl = millis();
-    }
-    // 4. Enviar heartbeat periodicamente
-    if (millis() - lastHeartbeat > HEARTBEAT_INTERVAL) {
-        if (firebase.isAuthenticated()) {
-            firebase.enviarHeartbeat();
-        }
-        lastHeartbeat = millis();
-    }
-    // 4. Lógica do Firebase (mantida como antes)
     if(firebase.isAuthenticated()) {
         if(millis() - lastTokenCheck > TOKEN_CHECK_INTERVAL) {
             firebase.refreshToken();
@@ -160,8 +126,8 @@ void loop() {
                     sensors.getCO2(),
                     sensors.getCO(),
                     sensors.getLight(),
-                    sensors.getTVOCs(), // Add this
-                    sensors.getWaterLevel() // Adicionado o sensor de nível de água
+                    sensors.getTVOCs(),
+                    sensors.getWaterLevel()
                 );
                 
                 firebase.verificarComandos(actuators);
@@ -184,7 +150,57 @@ void loop() {
             lastAuthAttempt = millis();
         }
     }
+}
+
+void handleRegularIntervals() {
+    static unsigned long lastSensorRead = 0;
+    static unsigned long lastActuatorControl = 0;
+    static unsigned long lastHeartbeat = 0;
     
-    // Pequena pausa não-bloqueante para estabilidade
+    const unsigned long SENSOR_READ_INTERVAL = 2000;
+    const unsigned long ACTUATOR_CONTROL_INTERVAL = 5000;
+    const unsigned long HEARTBEAT_INTERVAL = 15000;
+
+    if (millis() - lastSensorRead > SENSOR_READ_INTERVAL) {
+        sensors.update();
+        lastSensorRead = millis();
+    }
+    
+    if (millis() - lastActuatorControl > ACTUATOR_CONTROL_INTERVAL) {
+        actuators.controlarAutomaticamente(
+            sensors.getTemperature(),
+            sensors.getHumidity(),
+            sensors.getLight(),
+            sensors.getCO(),
+            sensors.getCO2(),
+            sensors.getTVOCs(),
+            sensors.getWaterLevel()
+        );
+        lastActuatorControl = millis();
+    }
+    
+    if (millis() - lastHeartbeat > HEARTBEAT_INTERVAL) {
+        if (firebase.isAuthenticated()) {
+            firebase.enviarHeartbeat();
+        }
+        lastHeartbeat = millis();
+    }
+}
+
+void setup() {
+    Serial.begin(115200);
+    delay(1000);
+    firebase.setWiFiConfigurator(&wifiConfig);
+    
+    setupSensorsAndActuators();
+    setupWiFiAndFirebase();
+}
+
+void loop() {
+    updateStatusLED();
+    webServer.handleClient();
+    handleRegularIntervals();
+    handleFirebaseOperations();
+    
     delay(10);
 }
