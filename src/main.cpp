@@ -6,7 +6,8 @@
 #include "ActuatorController.h"
 #include "perdiavontadedeviver.h"
 #include "genQrCode.h"
-
+#include "ansi.h"
+ANSI ansi(&Serial);
 const char* AP_SSID = "IFungi-Config";
 const char* AP_PASSWORD = "config1234";
 String ifungiID;
@@ -28,6 +29,7 @@ void handleRegularIntervals();
 void memateRapido() {
     String email, password;
     Serial.println("iniciando loop até loadFirebaseCredentials retornar true");
+    ansi.println("iniciando loop até loadFirebaseCredentials retornar true");
     while((email, password) != ("") && firebase.authenticated == true && !firebase.loadFirebaseCredentials(email, password)) {
         Serial.print(".");
         webServer.begin(true);
@@ -189,6 +191,20 @@ void handleRegularIntervals() {
 
 void setup() {
     Serial.begin(115200);
+    ansi.foreground(ANSI::white | ANSI::bright);
+    ansi.background(ANSI::red);
+    ansi.print(" Red ");
+    ansi.background(ANSI::green);
+    ansi.print(" Green ");
+    ansi.background(ANSI::magenta);
+    ansi.println(" Purple ");
+    Serial.println();
+
+    ansi.normal();
+    ansi.print("Doing nothing... ");
+    ansi.foreground(ANSI::yellow | ANSI::bright);
+    ansi.print("[ ]");
+    ansi.cursorBack(2);
     delay(1000);
     firebase.setWiFiConfigurator(&wifiConfig);
     
