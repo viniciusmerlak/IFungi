@@ -155,7 +155,7 @@ void FirebaseHandler::atualizarEstadoAtuadores(bool rele1, bool rele2, bool rele
     leds.set("ligado", ledsLigado);
     leds.set("watts", ledsWatts);
     atuadores.set("leds", leds);
-    json.set("umidificador", umidLigado);
+    atuadores.set("umidificador", umidLigado);
 
     
     // Adiciona timestamp
@@ -652,6 +652,7 @@ void FirebaseHandler::criarEstufaInicial(const String& usuarioCriador, const Str
     atuadores.set("rele2", false);
     atuadores.set("rele3", false);
     atuadores.set("rele4", false);
+    atuadores.set("umidificador", false);
     json.set("atuadores", atuadores);
 
     json.set("createdBy", usuarioCriador);
